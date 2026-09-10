@@ -1,0 +1,56 @@
+name: build-and-test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_VERSION: 10.0.x
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_NOLOGO: true
+
+jobs:
+  build-source:
+    name: Build source
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore src/Cloudflare.Workers.Hosting/Cloudflare.Workers.Hosting.csproj
+
+      - name: Build
+        run: dotnet build src/Cloudflare.Workers.Hosting/Cloudflare.Workers.Hosting.csproj --configuration Release --no-restore
+
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore tests/Cloudflare.Workers.Hosting.Tests/Cloudflare.Workers.Hosting.Tests.csproj
+
+      - name: Test
+        run: dotnet test tests/Cloudflare.Workers.Hosting.Tests/Cloudflare.Workers.Hosting.Tests.csproj --configuration Release --no-restore

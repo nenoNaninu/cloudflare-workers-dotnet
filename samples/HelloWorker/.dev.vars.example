@@ -1,0 +1,2 @@
+# Copy this file to .dev.vars before running Wrangler locally.
+SAMPLE_SECRET="replace-with-a-local-development-secret"

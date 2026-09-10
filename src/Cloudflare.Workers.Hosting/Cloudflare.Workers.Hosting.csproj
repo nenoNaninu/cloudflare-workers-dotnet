@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <IsAotCompatible>true</IsAotCompatible>
+        <Description>Build and deploy Cloudflare Workers applications written in C#.</Description>
+        <PackageTags>cloudflare;workers;wasm;webassembly;nativeaot</PackageTags>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <None Include="js\worker-shim.mjs" Pack="true" PackagePath="js\" />
+        <None Include="build\Cloudflare.Workers.Hosting.targets" Pack="true" PackagePath="build\" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="Cloudflare.Workers.Hosting.Tests" />
+    </ItemGroup>
+
+</Project>

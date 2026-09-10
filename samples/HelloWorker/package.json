@@ -1,0 +1,12 @@
+{
+  "devDependencies": {
+    "wrangler": "4.126.0"
+  },
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "secret:put": "wrangler secret put SAMPLE_SECRET",
+    "d1:migrate:local": "wrangler d1 migrations apply DB --local --config wrangler.local.jsonc",
+    "d1:migrate:remote": "wrangler d1 migrations apply DB --remote"
+  }
+}

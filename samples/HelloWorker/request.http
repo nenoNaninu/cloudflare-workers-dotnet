@@ -1,0 +1,40 @@
+@baseUrl = http://127.0.0.1:8787
+
+###
+POST {{baseUrl}}/echo
+Content-Type: application/json
+
+{
+  "message": "Hello, Worker!"
+}
+
+
+###
+GET {{baseUrl}}/env
+
+
+###
+GET {{baseUrl}}/delay/1000
+
+
+###
+GET {{baseUrl}}/wait-until
+
+
+###
+POST {{baseUrl}}/d1/messages
+Content-Type: application/json
+
+{
+  "text": "Hello from D111111111"
+}
+
+
+###
+GET {{baseUrl}}/d1/messages
+
+
+###
+PUT {{baseUrl}}/kv/piyo
+
+Hello, Worker!

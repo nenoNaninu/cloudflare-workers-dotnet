@@ -1,0 +1,50 @@
+<Project>
+
+  <PropertyGroup>
+    <_CloudflareWorkerShimPath>$(MSBuildThisFileDirectory)../js/worker-shim.mjs</_CloudflareWorkerShimPath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'wasi-wasm'">
+    <NativeLib>Shared</NativeLib>
+    <CustomNativeMain>true</CustomNativeMain>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'wasi-wasm'">
+    <UnmanagedEntryPointsAssembly Include="Cloudflare.Workers.Hosting" />
+    <!-- The shim allocates argv in wasi-libc memory before calling __managed__Main. -->
+    <LinkerArg Include="-Wl,--export=malloc" />
+  </ItemGroup>
+
+  <Target Name="_CloudflareWorkerWasip1Codegen"
+          BeforeTargets="WriteIlcRspFileForCompilation"
+          Condition="'$(RuntimeIdentifier)' == 'wasi-wasm'">
+    <PropertyGroup>
+      <IlcLlvmTarget>wasm32-unknown-wasip1</IlcLlvmTarget>
+      <!-- Export UnmanagedCallersOnly entry points (cf_fetch, ...). -->
+      <IlcExportUnmanagedEntrypoints>true</IlcExportUnmanagedEntrypoints>
+    </PropertyGroup>
+    <ItemGroup>
+      <WasmComponentTypeWit Remove="@(WasmComponentTypeWit)" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="StageCloudflareWorker" AfterTargets="Publish" Condition="'$(RuntimeIdentifier)' == 'wasi-wasm'">
+    <PropertyGroup>
+      <CloudflareWorkerStagingDir Condition="'$(CloudflareWorkerStagingDir)' == ''">$(PublishDir)worker/</CloudflareWorkerStagingDir>
+    </PropertyGroup>
+    <Error
+      Condition="!Exists('$(PublishDir)$(TargetName).wasm')"
+      Text="Expected wasm output '$(PublishDir)$(TargetName).wasm' was not produced. Check the NativeAOT-LLVM publish output." />
+    <MakeDir Directories="$(CloudflareWorkerStagingDir)" />
+    <Copy
+      SourceFiles="$(PublishDir)$(TargetName).wasm"
+      DestinationFiles="$(CloudflareWorkerStagingDir)app.wasm"
+      SkipUnchangedFiles="true" />
+    <Copy
+      SourceFiles="$(_CloudflareWorkerShimPath)"
+      DestinationFiles="$(CloudflareWorkerStagingDir)index.mjs"
+      SkipUnchangedFiles="true" />
+    <Message Importance="High" Text="Cloudflare Worker staged: $(CloudflareWorkerStagingDir) (main = index.mjs)" />
+  </Target>
+
+</Project>

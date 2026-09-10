@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Cloudflare.Workers.Hosting/Cloudflare.Workers.Hosting.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/HelloWorker/HelloWorker.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Cloudflare.Workers.Hosting.Tests/Cloudflare.Workers.Hosting.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,46 @@
+{
+    // Deploy/dev flow:
+    //   dotnet publish -c Release   (stages publish/worker/{index.mjs,app.wasm})
+    //   `npm run dev` or `npm run deploy`
+    "name": "hello-worker-csharp",
+    "main": "bin/Release/net10.0/wasi-wasm/publish/worker/index.mjs",
+    "compatibility_date": "2026-07-01",
+    "build": {
+        "command": "dotnet publish -c Release"
+    },
+    "vars": {
+        "SAMPLE_VAR": "Hello from wrangler.jsonc"
+    },
+    "secrets": {
+        "required": [
+            "SAMPLE_SECRET"
+        ]
+    },
+    // Backs the /kv/:key routes. 
+    "kv_namespaces": [
+        {
+            "binding": "HELLO_KV",
+            // "id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+            // "remote": true
+        }
+    ],
+    "d1_databases": [
+        {
+            "binding": "DB",
+            // "database_id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            "database_name": "hello-worker-db",
+            "migrations_dir": "migrations"
+        }
+    ],
+    "observability": {
+        "logs": {
+            "enabled": true,
+            "invocation_logs": true
+        },
+        "traces": {
+            "enabled": true,
+            "persist": true,
+            "head_sampling_rate": 1
+        }
+    }
+}

@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+
+        <!-- NativeAOT-LLVM / wasi-wasm -->
+        <RuntimeIdentifier>wasi-wasm</RuntimeIdentifier>
+        <SelfContained>true</SelfContained>
+        <UseAppHost>false</UseAppHost>
+        <PublishTrimmed>true</PublishTrimmed>
+        <InvariantGlobalization>true</InvariantGlobalization>
+        <MSBuildEnableWorkloadResolver>false</MSBuildEnableWorkloadResolver>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- The experimental NativeAOT-LLVM compiler (dotnet-experimental feed, see nuget.config). -->
+        <!-- https://github.com/dotnet/runtimelab/blob/feature/NativeAOT-LLVM/docs/using-nativeaot/compiling.md -->
+        <PackageReference Include="Microsoft.DotNet.ILCompiler.LLVM" />
+        <PackageReference Include="runtime.$(NETCoreSdkPortableRuntimeIdentifier).Microsoft.DotNet.ILCompiler.LLVM" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\Cloudflare.Workers.Hosting\Cloudflare.Workers.Hosting.csproj" />
+    </ItemGroup>
+
+    <!-- When consuming the NuGet package instead of a ProjectReference, this import happens automatically. -->
+    <Import Project="..\..\src\Cloudflare.Workers.Hosting\build\Cloudflare.Workers.Hosting.targets" />
+
+</Project>
