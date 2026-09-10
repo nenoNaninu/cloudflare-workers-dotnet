@@ -1,0 +1,45 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+*"
+
+env:
+  DOTNET_VERSION: "10.0.x"
+  DOTNET_NOLOGO: true
+
+jobs:
+  release:
+    name: release
+    permissions:
+      contents: read
+      id-token: write # for OIDC token
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: NuGet Login
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: nenoNaninu
+
+      - name: Get version from git tag
+        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+
+      - name: dotnet pack Cloudflare.Workers.Hosting
+        run: dotnet pack -c Release --output ${{ github.workspace }}/artifacts -p:Version=${{ env.RELEASE_VERSION }} ./src/Cloudflare.Workers.Hosting/Cloudflare.Workers.Hosting.csproj
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Packages
+          path: ${{ github.workspace }}/artifacts
+
+      - name: dotnet nuget push
+        run: dotnet nuget push ${{ github.workspace }}/artifacts/*.nupkg --skip-duplicate -k ${{ steps.login.outputs.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json
