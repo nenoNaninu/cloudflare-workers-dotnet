@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
-    <CentralPackageTransitivePinningEnabled>false</CentralPackageTransitivePinningEnabled>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
     <!-- NativeAOT-LLVM (dotnet-experimental feed); compiler and RID-specific host package share a version. -->
     <!-- https://github.com/dotnet/runtimelab/tree/feature/NativeAOT-LLVM -->
     <ILCompilerLLVMVersion>10.0.0-rc.1.26357.1</ILCompilerLLVMVersion>
