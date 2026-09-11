@@ -54,7 +54,15 @@ public sealed class HttpResponse
     public static HttpResponse Html(string html, int status = 200, string contentType = "text/html; charset=utf-8")
         => Text(html, status, contentType);
 
-    public static HttpResponse Empty(int status = 204) => new(status);
+    public static HttpResponse Ok() => new(200);
+
+    public static HttpResponse Created() => new(201);
+
+    public static HttpResponse Accepted() => new(202);
+
+    public static HttpResponse NoContent() => new(204);
+
+    public static HttpResponse Empty(int status = 200) => new(status);
 
     public static HttpResponse Error(string message, int status = 500) => Text(message, status);
 

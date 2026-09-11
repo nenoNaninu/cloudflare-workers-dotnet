@@ -6,6 +6,48 @@ namespace Cloudflare.Workers.Hosting.Tests;
 public class FetchTests
 {
     [Fact]
+    public async Task FetchRequestMessage_CollectionInitializerSetsHeadersAndPassesValuesToFetch()
+    {
+        var (interop, runtime) = FakeWorld.Create();
+        var captured = new List<object?[]>();
+        interop.Globals["fetch"] = new FakeFunction((_, args) =>
+        {
+            captured.Add(args);
+            return FakePromise.Resolved(new FakeObject { ["status"] = 204d });
+        });
+
+        var request = new FetchRequestMessage("https://api.example.com/messages")
+        {
+            Method = "POST",
+            Body = """{"message":"Hello from C#!"}""",
+            Headers =
+            {
+                { "Content-Type", "application/json" },
+                { "Accept", "application/json" }
+            }
+        };
+
+        Assert.Equal("https://api.example.com/messages", request.Url);
+        Assert.Equal("POST", request.Method);
+        Assert.Equal("""{"message":"Hello from C#!"}""", request.Body);
+        Assert.Equal(2, request.Headers.Count);
+        Assert.Equal("application/json", request.Headers.Get("Content-Type"));
+        Assert.Equal("application/json", request.Headers.Get("Accept"));
+
+        using var response = await Fetch.FetchAsync(runtime, request);
+
+        var args = Assert.Single(captured);
+        Assert.Equal("https://api.example.com/messages", args[0]);
+        var init = Assert.IsType<FakeObject>(args[1]);
+        Assert.Equal("POST", init["method"]);
+        Assert.Equal("""{"message":"Hello from C#!"}""", init["body"]);
+        var headers = Assert.IsType<FakeArray>(init["headers"]);
+        Assert.Collection(headers,
+            pair => Assert.Equal(["Content-Type", "application/json"], Assert.IsType<FakeArray>(pair).Cast<string>()),
+            pair => Assert.Equal(["Accept", "application/json"], Assert.IsType<FakeArray>(pair).Cast<string>()));
+    }
+
+    [Fact]
     public async Task FetchAsync_ReturnsWrappedResponse()
     {
         var (interop, runtime) = FakeWorld.Create();

@@ -73,7 +73,7 @@ public sealed class D1PreparedStatement : IDisposable
 
     public async Task<T?> AllAsync<T>(JsonTypeInfo<T> typeInfo)
     {
-        string json = await AllJsonAsync().ConfigureAwait(false);
+        var json = await AllJsonAsync().ConfigureAwait(false);
         return JsonSerializer.Deserialize(json, typeInfo);
     }
 
@@ -81,6 +81,15 @@ public sealed class D1PreparedStatement : IDisposable
     {
         using var row = await _js.CallAsync("first").ConfigureAwait(false);
         return row.IsNullOrUndefined ? null : _js.Runtime.JsonStringify(row);
+    }
+
+    public async Task<T?> FirstAsync<T>(JsonTypeInfo<T> typeInfo)
+    {
+        var json = await FirstJsonAsync();
+
+        return json is null
+            ? default
+            : JsonSerializer.Deserialize(json, typeInfo);
     }
 
     public void Dispose() => _js.Dispose();

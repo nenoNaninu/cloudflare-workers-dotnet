@@ -67,7 +67,7 @@ public class ResponseTests
         var fake = Assert.IsType<FakeObject>(interop.Get(js.Handle));
 
         Assert.Null(fake["body"]);
-        Assert.Equal(204d, fake["status"]);
+        Assert.Equal(200d, fake["status"]);
     }
 
     [Fact]
