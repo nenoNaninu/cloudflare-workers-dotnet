@@ -1,9 +1,9 @@
 {
     // Deploy/dev flow:
-    //   dotnet publish -c Release   (stages publish/worker/{index.mjs,app.wasm})
+    //   dotnet publish -c Release   (stages publish/worker/{index.js,app.wasm})
     //   `npm run dev` or `npm run deploy`
     "name": "hello-worker-csharp",
-    "main": "bin/Release/net10.0/wasi-wasm/publish/worker/index.mjs",
+    "main": "bin/Release/net10.0/wasi-wasm/publish/worker/index.js",
     "compatibility_date": "2026-07-01",
     "build": {
         "command": "dotnet publish -c Release"

@@ -193,7 +193,7 @@ The two key settings for `Cloudflare.Workers.Hosting` are `main` and `build.comm
 ```jsonc
 {
   "name": "[your-app-name]",
-  "main": "bin/Release/net10.0/wasi-wasm/publish/worker/index.mjs",
+  "main": "bin/Release/net10.0/wasi-wasm/publish/worker/index.js",
   "compatibility_date": "2026-09-10",
   "build": {
     "command": "dotnet publish [YourProject].csproj -c Release",

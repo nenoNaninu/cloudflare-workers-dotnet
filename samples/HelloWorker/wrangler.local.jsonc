@@ -2,7 +2,7 @@
   // Local E2E variant of wrangler.jsonc: no remote KV binding, so `wrangler dev`
   // works without CLOUDFLARE_API_TOKEN (uses local simulated KV storage).
   "name": "hello-worker-csharp",
-  "main": "bin/Release/net10.0/wasi-wasm/publish/worker/index.mjs",
+  "main": "bin/Release/net10.0/wasi-wasm/publish/worker/index.js",
   "compatibility_date": "2026-07-01",
   "build": {
     "command": "dotnet publish -c Release"

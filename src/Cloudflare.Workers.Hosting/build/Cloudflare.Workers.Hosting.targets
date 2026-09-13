@@ -42,9 +42,9 @@
       SkipUnchangedFiles="true" />
     <Copy
       SourceFiles="$(_CloudflareWorkerShimPath)"
-      DestinationFiles="$(CloudflareWorkerStagingDir)index.mjs"
+      DestinationFiles="$(CloudflareWorkerStagingDir)index.js"
       SkipUnchangedFiles="true" />
-    <Message Importance="High" Text="Cloudflare Worker staged: $(CloudflareWorkerStagingDir) (main = index.mjs)" />
+    <Message Importance="High" Text="Cloudflare Worker staged: $(CloudflareWorkerStagingDir) (main = index.js)" />
   </Target>
 
 </Project>
