@@ -1,7 +1,7 @@
 <Project>
 
   <PropertyGroup>
-    <_CloudflareWorkerShimPath>$(MSBuildThisFileDirectory)../js/worker-shim.mjs</_CloudflareWorkerShimPath>
+    <_CloudflareWorkerShimPath>$(MSBuildThisFileDirectory)../js/worker-shim.js</_CloudflareWorkerShimPath>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'wasi-wasm'">

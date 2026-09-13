@@ -9,7 +9,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <None Include="js\worker-shim.mjs" Pack="true" PackagePath="js\" />
+        <None Include="js\worker-shim.js" Pack="true" PackagePath="js\" />
         <None Include="build\Cloudflare.Workers.Hosting.targets" Pack="true" PackagePath="build\" />
     </ItemGroup>
 

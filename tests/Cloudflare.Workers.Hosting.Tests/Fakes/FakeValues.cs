@@ -59,7 +59,7 @@ public sealed class FakePromise
         Rejected,
     }
 
-    private readonly List<Action<bool, object?>> _callbacks = [];
+    private readonly List<Action<bool, object?>> _continuations = [];
 
     public PromiseState State { get; private set; } = PromiseState.Pending;
 
@@ -83,15 +83,15 @@ public sealed class FakePromise
 
     public void Reject(object? error) => Settle(PromiseState.Rejected, error);
 
-    public void OnSettled(Action<bool, object?> callback)
+    public void OnSettled(Action<bool, object?> continuation)
     {
         if (State == PromiseState.Pending)
         {
-            _callbacks.Add(callback);
+            _continuations.Add(continuation);
         }
         else
         {
-            callback(State == PromiseState.Fulfilled, Value);
+            continuation(State == PromiseState.Fulfilled, Value);
         }
     }
 
@@ -104,11 +104,11 @@ public sealed class FakePromise
 
         State = state;
         Value = value;
-        var callbacks = _callbacks.ToArray();
-        _callbacks.Clear();
-        foreach (var callback in callbacks)
+        var continuations = _continuations.ToArray();
+        _continuations.Clear();
+        foreach (var continuation in continuations)
         {
-            callback(state == PromiseState.Fulfilled, value);
+            continuation(state == PromiseState.Fulfilled, value);
         }
     }
 }

@@ -168,8 +168,8 @@ public sealed unsafe class WasmJsInterop : IJsInterop
         }
     }
 
-    public void PromiseRegisterCallback(JsHandle promise, int callbackId)
-        => WasmImports.PromiseRegisterCallback(promise.Value, callbackId);
+    public void PromiseRegisterContinuation(JsHandle promise, int continuationId)
+        => WasmImports.PromiseRegisterContinuation(promise.Value, continuationId);
 
     public PromiseId PromiseNew() => new(WasmImports.PromiseNew());
 
@@ -187,8 +187,8 @@ public sealed unsafe class WasmJsInterop : IJsInterop
         }
     }
 
-    public void SetTimeout(int callbackId, double milliseconds)
-        => WasmImports.SetTimeout(callbackId, milliseconds);
+    public void SetTimeout(int continuationId, double milliseconds)
+        => WasmImports.SetTimeout(continuationId, milliseconds);
 
     public void Log(ConsoleLevel level, string message)
     {
