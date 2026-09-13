@@ -95,4 +95,4 @@ public sealed class D1PreparedStatement : IDisposable
     public void Dispose() => _js.Dispose();
 }
 
-public sealed record D1Result(bool Success, long Changes, long? LastRowId);
+public sealed record D1Result(bool IsSuccess, long Changes, long? LastRowId);

@@ -5,11 +5,11 @@ namespace Cloudflare.Workers.Hosting.Interop;
 internal static class WorkerRuntimeExports
 {
     [UnmanagedCallersOnly(EntryPoint = "cf_promise_complete")]
-    internal static void PromiseComplete(int continuationId, int success, int valueHandle)
+    internal static void PromiseComplete(int continuationId, int isSuccess, int valueHandle)
     {
         try
         {
-            ContinuationRegistry.Complete(continuationId, success != 0, new JsHandle(valueHandle));
+            ContinuationRegistry.Complete(continuationId, isSuccess != 0, new JsHandle(valueHandle));
         }
         catch (Exception ex)
         {

@@ -100,10 +100,10 @@ public sealed class JsRuntime
     {
         var tcs = new TaskCompletionSource<JsObject>();
 
-        int continuationId = ContinuationRegistry.Register((success, handle) =>
+        int continuationId = ContinuationRegistry.Register((isSuccess, handle) =>
         {
             var value = WrapToJsObject(handle);
-            if (success)
+            if (isSuccess)
             {
                 tcs.SetResult(value);
             }

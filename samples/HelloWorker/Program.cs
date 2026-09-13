@@ -89,7 +89,7 @@ builder.MapGet("/d1/messages", static async context =>
     using var db = context.Env.D1("DB");
     using var statement = db.Prepare(
         "SELECT id, text, created_at FROM messages ORDER BY id DESC LIMIT 100");
-    MessageRow[] messages = await statement.AllAsync(
+    var messages = await statement.AllAsync(
         WorkerJsonContext.Default.MessageRowArray) ?? [];
     return HttpResponse.Json(messages, WorkerJsonContext.Default.MessageRowArray);
 });
@@ -101,8 +101,7 @@ builder.MapPost("/d1/messages", static async context =>
         return HttpResponse.Error("D1 binding DB is not configured.", 503);
     }
 
-    CreateMessageRequest? input = await context.Request.ReadAsJsonAsync(
-        WorkerJsonContext.Default.CreateMessageRequest);
+    var input = await context.Request.ReadAsJsonAsync(WorkerJsonContext.Default.CreateMessageRequest);
     string text = (input?.Text ?? string.Empty).Trim();
     if (text.Length is 0 or > 500)
     {
@@ -111,24 +110,24 @@ builder.MapPost("/d1/messages", static async context =>
 
     using var db = context.Env.D1("DB");
     string id = Guid.NewGuid().ToString();
-    using (var insert = db
-        .Prepare("INSERT INTO messages (id, text) VALUES (?1, ?2)")
-        .Bind(JsArg.From(id), JsArg.From(text)))
-    {
-        D1Result result = await insert.RunAsync();
-        if (!result.Success)
-        {
-            return HttpResponse.Error("Failed to insert the message.");
-        }
 
-        using var select = db
-            .Prepare("SELECT id, text, created_at FROM messages WHERE id = ?1")
-            .Bind(JsArg.From(id));
-        string? created = await select.FirstJsonAsync();
-        return created is null
-            ? HttpResponse.Error("The inserted message could not be read back.")
-            : HttpResponse.Json(created, 201);
+    using var insert = db
+        .Prepare("INSERT INTO messages (id, text) VALUES (?1, ?2)")
+        .Bind(JsArg.From(id), JsArg.From(text));
+    var result = await insert.RunAsync();
+
+    if (!result.IsSuccess)
+    {
+        return HttpResponse.Error("Failed to insert the message.");
     }
+
+    using var select = db
+        .Prepare("SELECT id, text, created_at FROM messages WHERE id = ?1")
+        .Bind(JsArg.From(id));
+    string? created = await select.FirstJsonAsync();
+    return created is null
+        ? HttpResponse.Error("The inserted message could not be read back.")
+        : HttpResponse.Json(created, 201);
 });
 
 // Outbound fetch through the Workers runtime.
