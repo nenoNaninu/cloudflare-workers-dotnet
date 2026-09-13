@@ -51,9 +51,9 @@ public sealed class FakeJsInterop : IJsInterop
     {
         var pending = PendingTimeouts.ToArray();
         PendingTimeouts.Clear();
-        foreach (int callbackId in pending)
+        foreach (int continuationId in pending)
         {
-            CallbackRegistry.Complete(callbackId, true, JsHandle.Undefined);
+            ContinuationRegistry.Complete(continuationId, true, JsHandle.Undefined);
         }
     }
 
@@ -201,17 +201,17 @@ public sealed class FakeJsInterop : IJsInterop
 
     public void BytesRead(JsHandle handle, Span<byte> destination) => AsBytes(handle).CopyTo(destination);
 
-    public void PromiseRegisterCallback(JsHandle promise, int callbackId)
+    public void PromiseRegisterContinuation(JsHandle promise, int continuationId)
     {
         var value = Get(promise);
         if (value is FakePromise fakePromise)
         {
-            fakePromise.OnSettled((ok, result) => CallbackRegistry.Complete(callbackId, ok, Retain(result)));
+            fakePromise.OnSettled((ok, result) => ContinuationRegistry.Complete(continuationId, ok, Retain(result)));
         }
         else
         {
             // Promise.resolve semantics: non-promises settle immediately.
-            CallbackRegistry.Complete(callbackId, true, Retain(value));
+            ContinuationRegistry.Complete(continuationId, true, Retain(value));
         }
     }
 
@@ -233,15 +233,15 @@ public sealed class FakeJsInterop : IJsInterop
     public void PromiseReject(PromiseId promiseId, string message)
         => Promises[promiseId].Reject(new FakeObject { ["message"] = message });
 
-    public void SetTimeout(int callbackId, double milliseconds)
+    public void SetTimeout(int continuationId, double milliseconds)
     {
         if (AutoFireTimeouts)
         {
-            CallbackRegistry.Complete(callbackId, true, JsHandle.Undefined);
+            ContinuationRegistry.Complete(continuationId, true, JsHandle.Undefined);
         }
         else
         {
-            PendingTimeouts.Add(callbackId);
+            PendingTimeouts.Add(continuationId);
         }
     }
 

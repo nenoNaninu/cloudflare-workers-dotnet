@@ -11,8 +11,8 @@ public static class WorkerTimer
     public static Task Delay(JsRuntime runtime, double milliseconds)
     {
         var completion = new TaskCompletionSource();
-        int callbackId = CallbackRegistry.Register((_, _) => completion.SetResult());
-        runtime.Interop.SetTimeout(callbackId, milliseconds);
+        int continuationId = ContinuationRegistry.Register((_, _) => completion.SetResult());
+        runtime.Interop.SetTimeout(continuationId, milliseconds);
         return completion.Task;
     }
 }

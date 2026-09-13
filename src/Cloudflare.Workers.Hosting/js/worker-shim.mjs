@@ -120,36 +120,36 @@ function kindOf(value) {
 
 const cfImports = {
   string_new: (ptr, len) => holdToHeap(readString(ptr, len)),
-  string_utf8_length: (h) => {
-    const bytes = textEncoder.encode(getFromHeap(h));
-    encodedStrings.set(h, bytes);
+  string_utf8_length: (handle) => {
+    const bytes = textEncoder.encode(getFromHeap(handle));
+    encodedStrings.set(handle, bytes);
     return bytes.length;
   },
-  string_read: (h, ptr) => {
-    const bytes = encodedStrings.get(h) ?? textEncoder.encode(getFromHeap(h));
-    encodedStrings.delete(h);
+  string_read: (handle, ptr) => {
+    const bytes = encodedStrings.get(handle) ?? textEncoder.encode(getFromHeap(handle));
+    encodedStrings.delete(handle);
     memoryBytes().set(bytes, ptr);
   },
 
   number_new: (value) => holdToHeap(value),
-  number_value: (h) => Number(getFromHeap(h)),
+  number_value: (handle) => Number(getFromHeap(handle)),
   boolean_new: (value) => (value !== 0 ? 2 : 3),
-  boolean_value: (h) => (getFromHeap(h) ? 1 : 0),
-  value_kind: (h) => kindOf(getFromHeap(h)),
+  boolean_value: (handle) => (getFromHeap(handle) ? 1 : 0),
+  value_kind: (handle) => kindOf(getFromHeap(handle)),
 
-  clone: (h) => holdToHeap(getFromHeap(h)),
-  release_handle: (h) => releaseFromHeap(h),
+  clone: (handle) => holdToHeap(getFromHeap(handle)),
+  release_handle: (handle) => releaseFromHeap(handle),
 
   object_new: () => holdToHeap({}),
   array_new: () => holdToHeap([]),
-  array_length: (h) => getFromHeap(h).length,
-  array_get: (h, index) => holdToHeap(getFromHeap(h)[index]),
-  array_push: (arrayH, valueH) => { getFromHeap(arrayH).push(getFromHeap(valueH)); },
+  array_length: (handle) => getFromHeap(handle).length,
+  array_get: (handle, index) => holdToHeap(getFromHeap(handle)[index]),
+  array_push: (arrayHandle, valueHandle) => { getFromHeap(arrayHandle).push(getFromHeap(valueHandle)); },
 
   global_get: (namePtr, nameLen) => holdToHeap(globalThis[readString(namePtr, nameLen)]),
-  property_get: (targetH, namePtr, nameLen) => {
+  property_get: (targetHandle, namePtr, nameLen) => {
     try {
-      const target = getFromHeap(targetH);
+      const target = getFromHeap(targetHandle);
       if (target === undefined || target === null) {
         return 0;
       }
@@ -158,19 +158,19 @@ const cfImports = {
       return 0;
     }
   },
-  property_set: (targetH, namePtr, nameLen, valueH) => {
-    getFromHeap(targetH)[readString(namePtr, nameLen)] = getFromHeap(valueH);
+  property_set: (targetHandle, namePtr, nameLen, valueHandle) => {
+    getFromHeap(targetHandle)[readString(namePtr, nameLen)] = getFromHeap(valueHandle);
   },
 
-  call_method: (targetH, namePtr, nameLen, argsH, outPtr) => {
+  call_method: (targetHandle, namePtr, nameLen, argsHandle, outPtr) => {
     try {
-      const target = getFromHeap(targetH);
+      const target = getFromHeap(targetHandle);
       const name = readString(namePtr, nameLen);
       const method = target?.[name];
       if (typeof method !== "function") {
         throw new TypeError(`${name} is not a function`);
       }
-      const result = method.apply(target, getFromHeap(argsH));
+      const result = method.apply(target, getFromHeap(argsHandle));
       memoryView().setInt32(outPtr, holdToHeap(result), true);
       return 0;
     } catch (error) {
@@ -178,9 +178,9 @@ const cfImports = {
       return 1;
     }
   },
-  call_function: (functionH, thisH, argsH, outPtr) => {
+  call_function: (functionHandle, thisHandle, argsHandle, outPtr) => {
     try {
-      const result = getFromHeap(functionH).apply(getFromHeap(thisH), getFromHeap(argsH));
+      const result = getFromHeap(functionHandle).apply(getFromHeap(thisHandle), getFromHeap(argsHandle));
       memoryView().setInt32(outPtr, holdToHeap(result), true);
       return 0;
     } catch (error) {
@@ -188,9 +188,9 @@ const cfImports = {
       return 1;
     }
   },
-  construct: (constructorH, argsH, outPtr) => {
+  construct: (constructorHandle, argsHandle, outPtr) => {
     try {
-      const result = Reflect.construct(getFromHeap(constructorH), getFromHeap(argsH));
+      const result = Reflect.construct(getFromHeap(constructorHandle), getFromHeap(argsHandle));
       memoryView().setInt32(outPtr, holdToHeap(result), true);
       return 0;
     } catch (error) {
@@ -204,25 +204,25 @@ const cfImports = {
     copy.set(new Uint8Array(instance.exports.memory.buffer, ptr, len));
     return holdToHeap(copy);
   },
-  bytes_length: (h) => asUint8Array(getFromHeap(h)).byteLength,
-  bytes_read: (h, ptr) => {
-    memoryBytes().set(asUint8Array(getFromHeap(h)), ptr);
+  bytes_length: (handle) => asUint8Array(getFromHeap(handle)).byteLength,
+  bytes_read: (handle, ptr) => {
+    memoryBytes().set(asUint8Array(getFromHeap(handle)), ptr);
   },
 
-  promise_register_callback: (promiseH, callbackId) => {
-    Promise.resolve(getFromHeap(promiseH)).then(
-      (value) => exportsOf().cf_promise_complete(callbackId, 1, holdToHeap(value)),
-      (error) => exportsOf().cf_promise_complete(callbackId, 0, holdToHeap(error)),
+  promise_register_continuation: (promiseHandle, continuationId) => {
+    Promise.resolve(getFromHeap(promiseHandle)).then(
+      (value) => exportsOf().cf_promise_complete(continuationId, 1, holdToHeap(value)),
+      (error) => exportsOf().cf_promise_complete(continuationId, 0, holdToHeap(error)),
     );
   },
 
   promise_new: () => createPromise(),
   promise_get: (id) => holdToHeap(promises.get(id).promise),
-  promise_resolve: (id, valueH) => {
+  promise_resolve: (id, valueHandle) => {
     const promise = promises.get(id);
     promises.delete(id);
-    promise?.resolve(getFromHeap(valueH));
-    releaseFromHeap(valueH);
+    promise?.resolve(getFromHeap(valueHandle));
+    releaseFromHeap(valueHandle);
   },
   promise_reject: (id, msgPtr, msgLen) => {
     const promise = promises.get(id);
@@ -230,8 +230,8 @@ const cfImports = {
     promise?.reject(new Error(readString(msgPtr, msgLen)));
   },
 
-  set_timeout: (callbackId, milliseconds) => {
-    setTimeout(() => exportsOf().cf_timeout_fired(callbackId), milliseconds);
+  set_timeout: (continuationId, milliseconds) => {
+    setTimeout(() => exportsOf().cf_timeout_fired(continuationId), milliseconds);
   },
 
   log: (level, ptr, len) => {

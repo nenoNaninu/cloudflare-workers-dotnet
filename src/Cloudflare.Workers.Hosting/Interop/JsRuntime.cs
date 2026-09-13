@@ -100,7 +100,7 @@ public sealed class JsRuntime
     {
         var tcs = new TaskCompletionSource<JsObject>();
 
-        int callbackId = CallbackRegistry.Register((success, handle) =>
+        int continuationId = ContinuationRegistry.Register((success, handle) =>
         {
             var value = WrapToJsObject(handle);
             if (success)
@@ -115,7 +115,7 @@ public sealed class JsRuntime
             }
         });
 
-        Interop.PromiseRegisterCallback(promise.Handle, callbackId);
+        Interop.PromiseRegisterContinuation(promise.Handle, continuationId);
         return tcs.Task;
     }
 

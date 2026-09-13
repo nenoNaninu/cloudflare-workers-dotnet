@@ -38,14 +38,14 @@ public interface IJsInterop
     void BytesRead(JsHandle handle, Span<byte> destination);
 
     // -- async ----------------------------------------------------------------
-    void PromiseRegisterCallback(JsHandle promise, int callbackId);
+    void PromiseRegisterContinuation(JsHandle promise, int continuationId);
 
     PromiseId PromiseNew();
     JsHandle PromiseGet(PromiseId promiseId);
     void PromiseResolve(PromiseId promiseId, JsHandle handle);
     void PromiseReject(PromiseId promiseId, string message);
 
-    void SetTimeout(int callbackId, double milliseconds);
+    void SetTimeout(int continuationId, double milliseconds);
 
     // -- diagnostics ----------------------------------------------------------
     void Log(ConsoleLevel level, string message);

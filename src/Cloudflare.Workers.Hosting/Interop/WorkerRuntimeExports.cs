@@ -5,11 +5,11 @@ namespace Cloudflare.Workers.Hosting.Interop;
 internal static class WorkerRuntimeExports
 {
     [UnmanagedCallersOnly(EntryPoint = "cf_promise_complete")]
-    internal static void PromiseComplete(int callbackId, int success, int valueHandle)
+    internal static void PromiseComplete(int continuationId, int success, int valueHandle)
     {
         try
         {
-            CallbackRegistry.Complete(callbackId, success != 0, new JsHandle(valueHandle));
+            ContinuationRegistry.Complete(continuationId, success != 0, new JsHandle(valueHandle));
         }
         catch (Exception ex)
         {
@@ -18,11 +18,11 @@ internal static class WorkerRuntimeExports
     }
 
     [UnmanagedCallersOnly(EntryPoint = "cf_timeout_fired")]
-    internal static void TimeoutFired(int callbackId)
+    internal static void TimeoutFired(int continuationId)
     {
         try
         {
-            CallbackRegistry.Complete(callbackId, true, JsHandle.Undefined);
+            ContinuationRegistry.Complete(continuationId, true, JsHandle.Undefined);
         }
         catch (Exception ex)
         {
@@ -34,7 +34,7 @@ internal static class WorkerRuntimeExports
     {
         try
         {
-            JsRuntime.Current.Interop.Log(ConsoleLevel.Error, $"[Cloudflare.Workers.Hosting] unhandled callback exception: {ex}");
+            JsRuntime.Current.Interop.Log(ConsoleLevel.Error, $"[Cloudflare.Workers.Hosting] unhandled continuation exception: {ex}");
         }
         catch
         {

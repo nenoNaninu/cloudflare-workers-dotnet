@@ -105,8 +105,8 @@ internal static unsafe class WasmImports
     internal static extern void BytesRead(int handle, byte* destination);
 
     [WasmImportLinkage]
-    [DllImport(Module, EntryPoint = "promise_register_callback")]
-    internal static extern void PromiseRegisterCallback(int promise, int callbackId);
+    [DllImport(Module, EntryPoint = "promise_register_continuation")]
+    internal static extern void PromiseRegisterContinuation(int promise, int continuationId);
 
     [WasmImportLinkage]
     [DllImport(Module, EntryPoint = "promise_new")]
@@ -126,7 +126,7 @@ internal static unsafe class WasmImports
 
     [WasmImportLinkage]
     [DllImport(Module, EntryPoint = "set_timeout")]
-    internal static extern void SetTimeout(int callbackId, double milliseconds);
+    internal static extern void SetTimeout(int continuationId, double milliseconds);
 
     [WasmImportLinkage]
     [DllImport(Module, EntryPoint = "log")]
