@@ -27,6 +27,7 @@ builder.Build().Run();
 
 ## Table of Contents
 
+- [Examples](#examples)
 - [Installation \& Setup](#installation--setup)
   - [Add the Packages](#add-the-packages)
   - [Install and Configure the WASI SDK](#install-and-configure-the-wasi-sdk)
@@ -34,15 +35,19 @@ builder.Build().Run();
 - [Usage](#usage)
   - [Write C# Code](#write-c-code)
   - [Development \& Deployment](#development--deployment)
-- [Basic API](#basic-api)
   - [Fetch](#fetch)
   - [KV](#kv)
   - [R2](#r2)
   - [D1](#d1)
     - [Migrations](#migrations)
 - [Limitations](#limitations)
-- [Examples](#examples)
 - [Supported Cloudflare Workers Features](#supported-cloudflare-workers-features)
+
+
+## Examples
+
+For the simplest example, see the [cloudflare-workers-dotnet-examples](https://github.com/nenoNaninu/cloudflare-workers-dotnet-examples).
+
 
 ## Installation & Setup
 
@@ -396,10 +401,6 @@ Running WASM on Cloudflare Workers comes with several limitations:
   - For example, use `Fetch.FetchAsync` instead of `HttpClient`. Support for `HttpClient` is planned.
 - Use `WorkerTimer.Delay` when your code needs to wait for a specified duration.
   - `Task.Delay` and `Thread.Sleep` are not available.
-
-## Examples
-
-See [cloudflare-workers-dotnet-examples](https://github.com/nenoNaninu/cloudflare-workers-dotnet-examples).
 
 ## Supported Cloudflare Workers Features
 
