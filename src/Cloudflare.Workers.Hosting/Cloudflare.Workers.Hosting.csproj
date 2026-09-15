@@ -4,8 +4,19 @@
         <TargetFramework>net10.0</TargetFramework>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <IsAotCompatible>true</IsAotCompatible>
+
+        <!-- NuGet -->
+        <PackageId>Cloudflare.Workers.Hosting</PackageId>
+        <AssemblyName>Cloudflare.Workers.Hosting</AssemblyName>
+        <Title>Cloudflare.Workers.Hosting</Title>
+        <Authors>nenoNaninu</Authors>
         <Description>Build and deploy Cloudflare Workers applications written in C#.</Description>
+        <RepositoryUrl>https://github.com/nenoNaninu/cloudflare-workers-dotnet</RepositoryUrl>
+        <PackageProjectUrl>$(RepositoryUrl)</PackageProjectUrl>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <RepositoryType>git</RepositoryType>
         <PackageTags>cloudflare;workers;wasm;webassembly;nativeaot</PackageTags>
+        <Copyright>(c) nenoNaninu</Copyright>
     </PropertyGroup>
 
     <ItemGroup>
