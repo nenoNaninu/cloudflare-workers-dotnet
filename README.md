@@ -1,5 +1,7 @@
 # Cloudflare Workers for .NET
 
+[![NuGet](https://img.shields.io/nuget/v/Cloudflare.Workers.Hosting.svg)](https://www.nuget.org/packages/Cloudflare.Workers.Hosting)
+
 Build and deploy Cloudflare Workers applications written in C#.
 
 You can write applications using the Minimal API style similar to ASP.NET Core.
@@ -99,7 +101,7 @@ Add references to the following three packages to your application project (`.cs
     <!-- ... -->
 
     <ItemGroup>
-        <PackageReference Include="Cloudflare.Workers.Hosting" Version="0.1.0" />
+        <PackageReference Include="Cloudflare.Workers.Hosting" Version="0.2.0" />
         <PackageReference Include="Microsoft.DotNet.ILCompiler.LLVM" Version="10.0.0-rc.1.26357.1" />
         <PackageReference Include="runtime.$(NETCoreSdkPortableRuntimeIdentifier).Microsoft.DotNet.ILCompiler.LLVM" Version="10.0.0-rc.1.26357.1" />
     </ItemGroup>
