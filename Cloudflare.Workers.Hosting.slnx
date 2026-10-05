@@ -6,6 +6,8 @@
     <Project Path="samples/HelloWorker/HelloWorker.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Cloudflare.Workers.Hosting.IntegrationTests.App/Cloudflare.Workers.Hosting.IntegrationTests.App.csproj" />
+    <Project Path="tests/Cloudflare.Workers.Hosting.IntegrationTests/Cloudflare.Workers.Hosting.IntegrationTests.csproj" />
     <Project Path="tests/Cloudflare.Workers.Hosting.Tests/Cloudflare.Workers.Hosting.Tests.csproj" />
   </Folder>
 </Solution>
