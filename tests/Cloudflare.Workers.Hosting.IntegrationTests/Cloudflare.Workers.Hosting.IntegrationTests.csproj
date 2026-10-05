@@ -13,6 +13,7 @@
 
     <ItemGroup>
         <PackageReference Include="xunit.v3" />
+        <PackageReference Include="ProcessX" />
         <FrameworkReference Include="Microsoft.AspNetCore.App" />
         <Using Include="Xunit" />
     </ItemGroup>

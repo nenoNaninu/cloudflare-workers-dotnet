@@ -109,7 +109,7 @@ builder.MapGet("/wait-until/:key", static c =>
     string key = c.Parameters["key"];
     var kv = c.Env.Kv("E2E_KV");
     // No Task.Run: the wasm runtime is single-threaded and has no thread pool to run it on.
-    c.WorkerContext.WaitUntil(PutAfterDelayAsync(kv, key));
+    c.WorkerContext.WaitUntil(PutAfterReleaseAsync(kv, key, Upstream(c)));
 
     return Task.FromResult(HttpResponse.Text("accepted", 202));
 });
@@ -388,11 +388,16 @@ builder.MapGet("/stress/handles/:n", static async c =>
 
 builder.Build().Run();
 
-static async Task PutAfterDelayAsync(KvNamespace kv, string key)
+static async Task PutAfterReleaseAsync(KvNamespace kv, string key, string upstreamUrl)
 {
     try
     {
-        await WorkerTimer.Delay(300);
+        // The test releases this request only after receiving the Worker's response.
+        using var response = await Fetch.FetchAsync(upstreamUrl + "/wait-until/" + key);
+        if (response.StatusCode != 204)
+        {
+            throw new InvalidOperationException($"waitUntil gate returned {response.StatusCode}.");
+        }
         await kv.PutAsync(key, "done-after-response");
     }
     finally

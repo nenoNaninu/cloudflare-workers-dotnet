@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -13,14 +14,27 @@ namespace Cloudflare.Workers.Hosting.IntegrationTests;
 public sealed class UpstreamServer : IAsyncDisposable
 {
     private readonly WebApplication _app;
+    private readonly ConcurrentDictionary<string, WaitUntilGate> _waitUntilGates;
 
-    private UpstreamServer(WebApplication app, string baseUrl)
+    private UpstreamServer(WebApplication app, string baseUrl, ConcurrentDictionary<string, WaitUntilGate> waitUntilGates)
     {
         _app = app;
         BaseUrl = baseUrl;
+        _waitUntilGates = waitUntilGates;
     }
 
     public string BaseUrl { get; }
+
+    public WaitUntilGate CreateWaitUntilGate(string key)
+    {
+        var gate = new WaitUntilGate(() => _waitUntilGates.TryRemove(key, out _));
+        if (!_waitUntilGates.TryAdd(key, gate))
+        {
+            throw new InvalidOperationException($"A waitUntil gate already exists for '{key}'.");
+        }
+
+        return gate;
+    }
 
     public static async Task<UpstreamServer> StartAsync()
     {
@@ -28,6 +42,19 @@ public sealed class UpstreamServer : IAsyncDisposable
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         builder.Logging.ClearProviders();
         var app = builder.Build();
+        var waitUntilGates = new ConcurrentDictionary<string, WaitUntilGate>();
+
+        app.MapGet("/wait-until/{key}", async (string key, HttpContext context) =>
+        {
+            if (!waitUntilGates.TryGetValue(key, out var gate))
+            {
+                return Results.NotFound();
+            }
+
+            gate.MarkStarted();
+            await gate.WaitForReleaseAsync(context.RequestAborted);
+            return Results.NoContent();
+        });
 
         app.Map("/echo", async (HttpContext context) =>
         {
@@ -64,12 +91,37 @@ public sealed class UpstreamServer : IAsyncDisposable
 
         await app.StartAsync();
         string address = app.Urls.First();
-        return new UpstreamServer(app, address.TrimEnd('/'));
+        return new UpstreamServer(app, address.TrimEnd('/'), waitUntilGates);
     }
 
     public async ValueTask DisposeAsync()
     {
+        foreach (var gate in _waitUntilGates.Values)
+        {
+            gate.Dispose();
+        }
         await _app.StopAsync();
         await _app.DisposeAsync();
+    }
+
+    public sealed class WaitUntilGate(Action remove) : IDisposable
+    {
+        private readonly TaskCompletionSource _started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _released = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task Started => _started.Task;
+
+        internal void MarkStarted() => _started.TrySetResult();
+
+        internal Task WaitForReleaseAsync(CancellationToken cancellationToken)
+            => _released.Task.WaitAsync(cancellationToken);
+
+        public void Release() => _released.TrySetResult();
+
+        public void Dispose()
+        {
+            Release();
+            remove();
+        }
     }
 }

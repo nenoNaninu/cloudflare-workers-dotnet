@@ -48,9 +48,19 @@ public class AsyncTests(WorkerFixture worker) : E2ETestBase(worker)
     public async Task WaitUntil_RunsAfterTheResponseIsSent()
     {
         string key = UniqueKey("wait-until");
-        using var response = await Client.GetAsync($"wait-until/{key}", Ct);
-        Assert.Equal(System.Net.HttpStatusCode.Accepted, response.StatusCode);
+        using var gate = Worker.CreateWaitUntilGate(key);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(Ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(20));
 
+        var responseTask = Client.GetAsync($"wait-until/{key}", timeout.Token);
+        await gate.Started.WaitAsync(timeout.Token);
+        // The upstream request is still blocked, so awaiting waitUntil before responding must fail.
+        using var response = await responseTask;
+        Assert.Equal(System.Net.HttpStatusCode.Accepted, response.StatusCode);
+        using var missing = await Client.GetAsync($"kv/{key}", timeout.Token);
+        Assert.Equal(System.Net.HttpStatusCode.NotFound, missing.StatusCode);
+
+        gate.Release();
         string value = await PollAsync(() => TryGetKvAsync(key));
         Assert.Equal("done-after-response", value);
     }
@@ -59,7 +69,7 @@ public class AsyncTests(WorkerFixture worker) : E2ETestBase(worker)
     public async Task ScheduledEvent_InvokesTheCronHandler()
     {
         // `wrangler dev --test-scheduled` exposes the scheduled handler over HTTP.
-        using var trigger = await Client.GetAsync("cdn-cgi/handler/scheduled?cron=*%2F5+*+*+*+*", Ct);
+        using var trigger = await Client.GetAsync("__scheduled?cron=*%2F5+*+*+*+*", Ct);
         Assert.True(trigger.IsSuccessStatusCode, await trigger.Content.ReadAsStringAsync(Ct));
 
         string value = await PollAsync(() => TryGetKvAsync("scheduled:last"));

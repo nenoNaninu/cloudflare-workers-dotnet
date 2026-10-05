@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using Cloudflare.Workers.Hosting.IntegrationTests;
+using Cysharp.Diagnostics;
 using Xunit;
 
 [assembly: AssemblyFixture(typeof(WorkerFixture))]
@@ -20,6 +21,8 @@ public sealed class WorkerFixture : IAsyncLifetime
     private readonly StringBuilder _log = new();
     private readonly string _persistDirectory = Path.Combine(Path.GetTempPath(), "cf-e2e-" + Guid.NewGuid().ToString("N"));
     private Process? _wrangler;
+    private Task? _wranglerOutputTask;
+    private bool _stopping;
     private UpstreamServer? _upstream;
 
     public static bool Enabled => Environment.GetEnvironmentVariable("CLOUDFLARE_E2E") == "1";
@@ -31,6 +34,9 @@ public sealed class WorkerFixture : IAsyncLifetime
 
     /// <summary>Base URL of the local HTTP server the worker calls out to.</summary>
     public string UpstreamUrl => _upstream?.BaseUrl ?? throw new InvalidOperationException("E2E tests are disabled.");
+
+    public UpstreamServer.WaitUntilGate CreateWaitUntilGate(string key)
+        => (_upstream ?? throw new InvalidOperationException("E2E tests are disabled.")).CreateWaitUntilGate(key);
 
     public string WranglerLog
     {
@@ -70,44 +76,26 @@ public sealed class WorkerFixture : IAsyncLifetime
         int inspectorPort = GetFreePort();
         BaseAddress = new Uri($"http://127.0.0.1:{port}/");
 
-        var startInfo = new ProcessStartInfo("node")
+        string command = $"node \"{wrangler}\" dev -c wrangler.jsonc -c upstream/wrangler.jsonc"
+            + $" --test-scheduled --ip 127.0.0.1 --port {port} --inspector-port {inspectorPort}"
+            + $" --persist-to \"{_persistDirectory}\" --var \"UPSTREAM_URL:{_upstream.BaseUrl}\"";
+
+        // ProcessX adds environment variables rather than overwriting them. Keep inherited
+        // values (including CI on GitHub Actions) and supply defaults only when absent.
+        var environment = new Dictionary<string, string>
         {
-            WorkingDirectory = workerDirectory,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        startInfo.ArgumentList.Add(wrangler);
-        startInfo.ArgumentList.Add("dev");
-        startInfo.ArgumentList.Add("-c");
-        startInfo.ArgumentList.Add("wrangler.jsonc");
-        startInfo.ArgumentList.Add("-c");
-        startInfo.ArgumentList.Add("upstream/wrangler.jsonc");
-        startInfo.ArgumentList.Add("--test-scheduled");
-        startInfo.ArgumentList.Add("--ip");
-        startInfo.ArgumentList.Add("127.0.0.1");
-        startInfo.ArgumentList.Add("--port");
-        startInfo.ArgumentList.Add(port.ToString());
-        startInfo.ArgumentList.Add("--inspector-port");
-        startInfo.ArgumentList.Add(inspectorPort.ToString());
-        startInfo.ArgumentList.Add("--persist-to");
-        startInfo.ArgumentList.Add(_persistDirectory);
-        startInfo.ArgumentList.Add("--var");
-        startInfo.ArgumentList.Add($"UPSTREAM_URL:{_upstream.BaseUrl}");
-        startInfo.Environment["WRANGLER_SEND_METRICS"] = "false";
-        startInfo.Environment["NO_COLOR"] = "1";
-        startInfo.Environment["CI"] = "1";
+            ["WRANGLER_SEND_METRICS"] = "false",
+            ["NO_COLOR"] = "1",
+            ["CI"] = "1",
+        }
+            .Where(entry => Environment.GetEnvironmentVariable(entry.Key) is null)
+            .ToDictionary(entry => entry.Key, entry => entry.Value);
 
         var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        _wrangler = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
-        _wrangler.OutputDataReceived += (_, e) => OnLine(e.Data, ready);
-        _wrangler.ErrorDataReceived += (_, e) => OnLine(e.Data, ready);
-        _wrangler.Exited += (_, _) => ready.TrySetException(
-            new InvalidOperationException("wrangler dev exited before it was ready." + Environment.NewLine + WranglerLog));
-        _wrangler.Start();
-        _wrangler.BeginOutputReadLine();
-        _wrangler.BeginErrorReadLine();
+        var (process, stdout, stderr) = ProcessX.GetDualAsyncEnumerable(
+            command, workingDirectory: workerDirectory, environmentVariable: environment, encoding: Encoding.UTF8);
+        _wrangler = process;
+        _wranglerOutputTask = ObserveWranglerAsync(stdout, stderr, ready);
 
         using var timeout = new CancellationTokenSource(StartupTimeout);
         try
@@ -149,6 +137,37 @@ public sealed class WorkerFixture : IAsyncLifetime
     {
         Client?.Dispose();
 
+        try
+        {
+            await StopWranglerAsync();
+        }
+        finally
+        {
+            if (_upstream is not null)
+            {
+                await _upstream.DisposeAsync();
+            }
+
+            try
+            {
+                File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "wrangler-e2e.log"), WranglerLog);
+                if (Directory.Exists(_persistDirectory))
+                {
+                    Directory.Delete(_persistDirectory, recursive: true);
+                }
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+        }
+    }
+
+    private async Task StopWranglerAsync()
+    {
+        _stopping = true;
         if (_wrangler is not null)
         {
             try
@@ -156,52 +175,54 @@ public sealed class WorkerFixture : IAsyncLifetime
                 if (!_wrangler.HasExited)
                 {
                     _wrangler.Kill(entireProcessTree: true);
-                    await _wrangler.WaitForExitAsync();
                 }
             }
             catch (InvalidOperationException)
             {
             }
-
-            _wrangler.Dispose();
         }
 
-        if (_upstream is not null)
+        if (_wranglerOutputTask is not null)
         {
-            await _upstream.DisposeAsync();
-        }
-
-        try
-        {
-            File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "wrangler-e2e.log"), WranglerLog);
-            if (Directory.Exists(_persistDirectory))
-            {
-                Directory.Delete(_persistDirectory, recursive: true);
-            }
-        }
-        catch (IOException)
-        {
-        }
-        catch (UnauthorizedAccessException)
-        {
+            // ProcessX disposes the process after stdout is drained. Wait for both streams
+            // before writing the log; cancellation would discard buffered output.
+            await _wranglerOutputTask;
         }
     }
 
-    private void OnLine(string? line, TaskCompletionSource ready)
+    private async Task ObserveWranglerAsync(IAsyncEnumerable<string> stdout, IAsyncEnumerable<string> stderr, TaskCompletionSource ready)
     {
-        if (line is null)
+        try
         {
-            return;
+            await Task.WhenAll(ReadOutputAsync(stdout, ready), ReadOutputAsync(stderr, ready));
+            ready.TrySetException(new InvalidOperationException(
+                "wrangler dev exited before it was ready." + Environment.NewLine + WranglerLog));
         }
-
-        lock (_log)
+        catch (ProcessErrorException) when (_stopping)
         {
-            _log.AppendLine(line);
+            // Killing the process tree during teardown produces a nonzero exit code.
         }
-
-        if (line.Contains("Ready on", StringComparison.Ordinal))
+        catch (Exception ex)
         {
-            ready.TrySetResult();
+            ready.TrySetException(new InvalidOperationException(
+                "wrangler dev failed." + Environment.NewLine + WranglerLog, ex));
+            throw;
+        }
+    }
+
+    private async Task ReadOutputAsync(IAsyncEnumerable<string> output, TaskCompletionSource ready)
+    {
+        await foreach (string line in output)
+        {
+            lock (_log)
+            {
+                _log.AppendLine(line);
+            }
+
+            if (line.Contains("Ready on", StringComparison.Ordinal))
+            {
+                ready.TrySetResult();
+            }
         }
     }
 
