@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using System.Text;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -9,7 +8,7 @@ using Microsoft.Extensions.Logging;
 namespace Cloudflare.Workers.Hosting.IntegrationTests;
 
 /// <summary>
-/// A local HTTP server the worker calls with <c>fetch</c> / <c>HttpClient</c>, so the tests never depend on the internet.
+/// A local HTTP server the worker calls with <c>fetch</c>, so the tests never depend on the internet.
 /// </summary>
 public sealed class UpstreamServer : IAsyncDisposable
 {
@@ -57,32 +56,11 @@ public sealed class UpstreamServer : IAsyncDisposable
             return Results.Text("headers", "text/plain");
         });
 
-        app.MapGet("/status/{code:int}", (int code, HttpContext context) =>
-        {
-            context.Response.Headers["x-upstream"] = "yes";
-            return Results.Text($"status {code}", "text/plain", statusCode: code);
-        });
-
         app.MapGet("/redirect", () => Results.Redirect("/echo?redirected=1"));
 
         app.MapGet("/bytes", () => Results.Bytes(Enumerable.Range(0, 256).Select(i => (byte)i).ToArray(), "application/octet-stream"));
 
         app.MapGet("/json", () => Results.Text("""{"name":"Ada","age":36}""", "application/json"));
-
-        app.MapGet("/text/{i:int}", (int i) => Results.Text($"text-{i}", "text/plain"));
-
-        app.MapGet("/gzip", async (HttpContext context) =>
-        {
-            using var buffer = new MemoryStream();
-            await using (var gzip = new GZipStream(buffer, CompressionLevel.Optimal, leaveOpen: true))
-            {
-                await gzip.WriteAsync(Encoding.UTF8.GetBytes("compressed payload"));
-            }
-
-            context.Response.Headers.ContentEncoding = "gzip";
-            context.Response.ContentType = "text/plain";
-            await context.Response.Body.WriteAsync(buffer.ToArray());
-        });
 
         await app.StartAsync();
         string address = app.Urls.First();

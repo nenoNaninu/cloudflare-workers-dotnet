@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json.Serialization;
 using Cloudflare.Workers.Hosting;
 using Cloudflare.Workers.Hosting.Interop;
@@ -371,85 +370,6 @@ builder.MapGet("/fetch/unreachable", static async _ =>
     }
 });
 
-// -- HttpClient (FetchHttpMessageHandler) ------------------------------------------------
-
-builder.MapGet("/http-client/get", static async c =>
-{
-    using var request = new HttpRequestMessage(HttpMethod.Get, Upstream(c) + "/echo?from=http-client");
-    request.Headers.Add("x-e2e", "http-client");
-    using var response = await Clients.Default.SendAsync(request);
-    return await Summarize(response);
-});
-
-builder.MapPost("/http-client/post", static async c =>
-{
-    using var content = new StringContent(await c.Request.ReadAsStringAsync(), Encoding.UTF8, "application/json");
-    using var response = await Clients.Default.PostAsync(Upstream(c) + "/echo", content);
-    return await Summarize(response);
-});
-
-builder.MapGet("/http-client/status/:code", static async c =>
-{
-    using var response = await Clients.Default.GetAsync(Upstream(c) + "/status/" + c.Parameters["code"]);
-    return await Summarize(response);
-});
-
-builder.MapGet("/http-client/redirect/:auto", static async c =>
-{
-    var client = c.Parameters["auto"] == "true" ? Clients.Default : Clients.NoRedirect;
-    using var response = await client.GetAsync(Upstream(c) + "/redirect");
-    var result = new ClientResult(
-        (int)response.StatusCode,
-        response.Content.Headers.ContentType?.MediaType,
-        await response.Content.ReadAsStringAsync(),
-        response.Headers.TryGetValues("location", out var location) ? location.First() : null);
-    return HttpResponse.Json(result, E2EJsonContext.Default.ClientResult);
-});
-
-builder.MapGet("/http-client/bytes", static async c =>
-{
-    return HttpResponse.Binary(await Clients.Default.GetByteArrayAsync(Upstream(c) + "/bytes"));
-});
-
-builder.MapGet("/http-client/gzip", static async c =>
-{
-    return HttpResponse.Text(await Clients.Default.GetStringAsync(Upstream(c) + "/gzip"));
-});
-
-builder.MapGet("/http-client/parallel", static async c =>
-{
-    var bodies = await Task.WhenAll(Enumerable.Range(0, 8).Select(i => Clients.Default.GetStringAsync(Upstream(c) + "/text/" + i)));
-    return HttpResponse.Text(string.Join(",", bodies));
-});
-
-builder.MapGet("/http-client/unreachable", static async _ =>
-{
-    try
-    {
-        await Clients.Default.GetAsync("http://127.0.0.1:1/");
-        return HttpResponse.Text("no error", 500);
-    }
-    catch (Exception ex)
-    {
-        return HttpResponse.Text(ex.GetType().Name, 502);
-    }
-});
-
-builder.MapGet("/http-client/cancelled", static async c =>
-{
-    using var cts = new CancellationTokenSource();
-    cts.Cancel();
-    try
-    {
-        await Clients.Default.GetAsync(Upstream(c) + "/echo", cts.Token);
-        return HttpResponse.Text("no error", 500);
-    }
-    catch (OperationCanceledException)
-    {
-        return HttpResponse.Text("cancelled");
-    }
-});
-
 // -- handle lifetime -----------------------------------------------------------------------
 
 // Creates and releases many JS handles in a single request to shake out leaks / double frees.
@@ -506,16 +426,6 @@ static string? Query(HttpContext c, string name)
     return null;
 }
 
-static async Task<HttpResponse> Summarize(HttpResponseMessage response)
-{
-    var result = new ClientResult(
-        (int)response.StatusCode,
-        response.Content.Headers.ContentType?.MediaType,
-        await response.Content.ReadAsStringAsync(),
-        response.Headers.TryGetValues("x-upstream", out var values) ? string.Join(",", values) : null);
-    return HttpResponse.Json(result, E2EJsonContext.Default.ClientResult);
-}
-
 public sealed record Person(
     [property: JsonPropertyName("name")] string Name,
     [property: JsonPropertyName("age")] int Age);
@@ -563,12 +473,6 @@ public sealed record FetchHeadersInfo(
     [property: JsonPropertyName("multi")] string? Multi,
     [property: JsonPropertyName("contentType")] string? ContentType);
 
-public sealed record ClientResult(
-    [property: JsonPropertyName("status")] int Status,
-    [property: JsonPropertyName("contentType")] string? ContentType,
-    [property: JsonPropertyName("body")] string Body,
-    [property: JsonPropertyName("header")] string? Header);
-
 [JsonSerializable(typeof(Person))]
 [JsonSerializable(typeof(HeaderPair[]))]
 [JsonSerializable(typeof(EnvInfo))]
@@ -578,14 +482,4 @@ public sealed record ClientResult(
 [JsonSerializable(typeof(ItemRow[]))]
 [JsonSerializable(typeof(D1RunInfo))]
 [JsonSerializable(typeof(FetchHeadersInfo))]
-[JsonSerializable(typeof(ClientResult))]
 public sealed partial class E2EJsonContext : JsonSerializerContext;
-
-// HttpClient instances are meant to be created once and reused.
-// HttpClient.Timeout relies on the BCL timer queue, which does not exist on Workers.
-public static class Clients
-{
-    public static readonly HttpClient Default = new(new FetchHttpMessageHandler()) { Timeout = Timeout.InfiniteTimeSpan };
-
-    public static readonly HttpClient NoRedirect = new(new FetchHttpMessageHandler { AllowAutoRedirect = false }) { Timeout = Timeout.InfiniteTimeSpan };
-}

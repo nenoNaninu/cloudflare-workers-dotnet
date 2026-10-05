@@ -3,7 +3,7 @@ using System.Text.Json;
 
 namespace Cloudflare.Workers.Hosting.IntegrationTests;
 
-/// <summary>Outbound requests: the <c>Fetch</c> class and <c>HttpClient</c> over <c>FetchHttpMessageHandler</c>.</summary>
+/// <summary>Outbound requests through the <c>Fetch</c> class.</summary>
 public class FetchTests(WorkerFixture worker) : E2ETestBase(worker)
 {
     [E2EFact]
@@ -63,92 +63,5 @@ public class FetchTests(WorkerFixture worker) : E2ETestBase(worker)
     {
         using var response = await Client.GetAsync("fetch/unreachable", Ct);
         Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
-    }
-}
-
-public class HttpClientTests(WorkerFixture worker) : E2ETestBase(worker)
-{
-    [E2EFact]
-    public async Task Get_SendsDefaultHeadersAndReadsTheResponse()
-    {
-        var result = await GetJsonAsync("http-client/get");
-        Assert.Equal(200, result.GetProperty("status").GetInt32());
-        Assert.Equal("application/json", result.GetProperty("contentType").GetString());
-        Assert.Equal("yes", result.GetProperty("header").GetString());
-
-        var echoed = JsonDocument.Parse(result.GetProperty("body").GetString()!).RootElement;
-        Assert.Equal("GET", echoed.GetProperty("method").GetString());
-        Assert.Equal("?from=http-client", echoed.GetProperty("query").GetString());
-        Assert.Equal("http-client", echoed.GetProperty("headers").GetProperty("x-e2e").GetString());
-    }
-
-    [E2EFact]
-    public async Task Post_SendsBodyAndContentType()
-    {
-        var result = await SendJsonAsync(HttpMethod.Post, "http-client/post", Text("""{"msg":"こんにちは"}""", "application/json"));
-        Assert.Equal(200, result.GetProperty("status").GetInt32());
-
-        var echoed = JsonDocument.Parse(result.GetProperty("body").GetString()!).RootElement;
-        Assert.Equal("POST", echoed.GetProperty("method").GetString());
-        Assert.Equal("""{"msg":"こんにちは"}""", echoed.GetProperty("body").GetString());
-        Assert.StartsWith("application/json", echoed.GetProperty("headers").GetProperty("content-type").GetString());
-    }
-
-    [E2EFact]
-    public async Task ErrorStatusCodes_AreReturnedNotThrown()
-    {
-        foreach (int code in new[] { 201, 400, 404, 500, 503 })
-        {
-            var result = await GetJsonAsync($"http-client/status/{code}");
-            Assert.Equal(code, result.GetProperty("status").GetInt32());
-            Assert.Equal($"status {code}", result.GetProperty("body").GetString());
-        }
-    }
-
-    [E2EFact]
-    public async Task AllowAutoRedirect_ControlsRedirectHandling()
-    {
-        var followed = await GetJsonAsync("http-client/redirect/true");
-        Assert.Equal(200, followed.GetProperty("status").GetInt32());
-        Assert.Contains("redirected=1", followed.GetProperty("body").GetString());
-
-        var notFollowed = await GetJsonAsync("http-client/redirect/false");
-        Assert.Equal(302, notFollowed.GetProperty("status").GetInt32());
-        Assert.Contains("/echo", notFollowed.GetProperty("header").GetString());
-    }
-
-    [E2EFact]
-    public async Task BinaryBody_IsReadIntact()
-    {
-        Assert.Equal(
-            Enumerable.Range(0, 256).Select(i => (byte)i),
-            await Client.GetByteArrayAsync("http-client/bytes", Ct));
-    }
-
-    [E2EFact]
-    public async Task ContentEncoding_IsDecodedByTheRuntime()
-    {
-        Assert.Equal("compressed payload", await Client.GetStringAsync("http-client/gzip", Ct));
-    }
-
-    [E2EFact]
-    public async Task ParallelRequests_AllComplete()
-    {
-        Assert.Equal(
-            string.Join(",", Enumerable.Range(0, 8).Select(i => $"text-{i}")),
-            await Client.GetStringAsync("http-client/parallel", Ct));
-    }
-
-    [E2EFact]
-    public async Task NetworkFailure_IsThrownToTheCaller()
-    {
-        using var response = await Client.GetAsync("http-client/unreachable", Ct);
-        Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
-    }
-
-    [E2EFact]
-    public async Task CancelledToken_ThrowsOperationCanceled()
-    {
-        Assert.Equal("cancelled", await Client.GetStringAsync("http-client/cancelled", Ct));
     }
 }

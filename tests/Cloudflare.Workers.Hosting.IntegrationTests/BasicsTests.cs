@@ -54,6 +54,7 @@ public class BasicsTests(WorkerFixture worker) : E2ETestBase(worker)
     {
         var bytes = Enumerable.Range(0, 256).Select(i => (byte)i).ToArray();
         using var response = await Client.PostAsync("echo/bytes", new ByteArrayContent(bytes), Ct);
+        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync(Ct));
         Assert.Equal(bytes, await response.Content.ReadAsByteArrayAsync(Ct));
     }
 
