@@ -11,7 +11,7 @@ using Xunit;
 namespace Cloudflare.Workers.Hosting.IntegrationTests;
 
 /// <summary>
-/// Starts the C# worker (plus the JS upstream worker) with <c>wrangler dev</c> once per test run
+/// Starts the C# worker (plus the JS upstream worker) with <c>npm run dev</c> once per test run
 /// and exposes an <see cref="HttpClient"/> pointing at it.
 /// </summary>
 public sealed class WorkerFixture : IAsyncLifetime
@@ -50,7 +50,7 @@ public sealed class WorkerFixture : IAsyncLifetime
     public async ValueTask InitializeAsync()
     {
         string workerDirectory = Path.Combine(FindRepositoryRoot(), "tests", "Cloudflare.Workers.Hosting.IntegrationTests.App");
-        string wrangler = Path.Combine(workerDirectory, "node_modules", "wrangler", "bin", "wrangler.js");
+        string wrangler = Path.Combine(workerDirectory, "node_modules", ".bin", OperatingSystem.IsWindows() ? "wrangler.cmd" : "wrangler");
         string publishedWorker = Path.Combine(workerDirectory, "bin", "Release", "net10.0", "wasi-wasm", "publish", "worker", "index.js");
 
         if (!File.Exists(wrangler))
@@ -69,8 +69,9 @@ public sealed class WorkerFixture : IAsyncLifetime
         int inspectorPort = GetFreePort();
         BaseAddress = new Uri($"http://127.0.0.1:{port}/");
 
-        string command = $"node \"{wrangler}\" dev -c wrangler.jsonc -c upstream/wrangler.jsonc"
-            + $" --test-scheduled --ip 127.0.0.1 --port {port} --inspector-port {inspectorPort}"
+        // npm is a .cmd script on Windows, so start it through the command interpreter.
+        string command = (OperatingSystem.IsWindows() ? "cmd.exe /d /c npm run dev --" : "npm run dev --")
+            + $" --ip 127.0.0.1 --port {port} --inspector-port {inspectorPort}"
             + $" --persist-to \"{_persistDirectory}\" --var \"UPSTREAM_URL:{_upstream.BaseUrl}\"";
 
         // ProcessX adds environment variables rather than overwriting them. Keep inherited
@@ -167,7 +168,16 @@ public sealed class WorkerFixture : IAsyncLifetime
             {
                 if (!_wrangler.HasExited)
                 {
-                    _wrangler.Kill(entireProcessTree: true);
+                    if (OperatingSystem.IsWindows())
+                    {
+                        // npm adds command shells to the process tree. Stop their descendants
+                        // before the shells exit so they do not keep the output streams open.
+                        await ProcessX.StartAsync($"taskkill /PID {_wrangler.Id} /T /F").WaitAsync();
+                    }
+                    else
+                    {
+                        _wrangler.Kill(entireProcessTree: true);
+                    }
                 }
             }
             catch (InvalidOperationException)

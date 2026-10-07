@@ -1,5 +1,8 @@
 {
   "private": true,
+  "scripts": {
+    "dev": "wrangler dev -c wrangler.jsonc -c upstream/wrangler.jsonc --test-scheduled"
+  },
   "devDependencies": {
     "wrangler": "4.126.0"
   }
