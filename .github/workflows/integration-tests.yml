@@ -68,5 +68,5 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: wrangler-integration-log
-          path: tests/Cloudflare.Workers.Hosting.IntegrationTests/bin/Release/net10.0/wrangler-e2e.log
+          path: tests/Cloudflare.Workers.Hosting.IntegrationTests/bin/Release/net10.0/wrangler-integration-test.log
           if-no-files-found: ignore

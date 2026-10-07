@@ -3,23 +3,23 @@
     //   dotnet publish -c Release
     //   npm ci
     //   npm run dev
-    "name": "e2e-worker-csharp",
+    "name": "integration-test-worker-csharp",
     "main": "bin/Release/net10.0/wasi-wasm/publish/worker/index.js",
     "compatibility_date": "2026-07-01",
     "vars": {
-        "E2E_VAR": "value from wrangler.jsonc"
+        "INTEGRATION_TEST_VAR": "value from wrangler.jsonc"
     },
     "kv_namespaces": [
-        { "binding": "E2E_KV" }
+        { "binding": "INTEGRATION_TEST_KV" }
     ],
     "r2_buckets": [
-        { "binding": "E2E_R2", "bucket_name": "e2e-bucket" }
+        { "binding": "INTEGRATION_TEST_R2", "bucket_name": "integration-test-bucket" }
     ],
     "d1_databases": [
-        { "binding": "E2E_DB", "database_name": "e2e-db", "database_id": "e2e-db-local" }
+        { "binding": "INTEGRATION_TEST_DB", "database_name": "integration-test-db", "database_id": "integration-test-db-local" }
     ],
     "services": [
-        { "binding": "E2E_UPSTREAM", "service": "e2e-upstream" }
+        { "binding": "INTEGRATION_TEST_UPSTREAM", "service": "integration-test-upstream" }
     ],
     "triggers": {
         "crons": ["*/5 * * * *"]

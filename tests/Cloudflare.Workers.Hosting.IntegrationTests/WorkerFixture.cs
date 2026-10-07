@@ -19,7 +19,7 @@ public sealed class WorkerFixture : IAsyncLifetime
     private static readonly TimeSpan StartupTimeout = TimeSpan.FromMinutes(3);
 
     private readonly StringBuilder _log = new();
-    private readonly string _persistDirectory = Path.Combine(Path.GetTempPath(), "cf-e2e-" + Guid.NewGuid().ToString("N"));
+    private readonly string _persistDirectory = Path.Combine(Path.GetTempPath(), "cf-integration-test-" + Guid.NewGuid().ToString("N"));
     private Process? _wrangler;
     private Task? _wranglerOutputTask;
     private bool _stopping;
@@ -144,7 +144,7 @@ public sealed class WorkerFixture : IAsyncLifetime
 
             try
             {
-                File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "wrangler-e2e.log"), WranglerLog);
+                File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "wrangler-integration-test.log"), WranglerLog);
                 if (Directory.Exists(_persistDirectory))
                 {
                     Directory.Delete(_persistDirectory, recursive: true);

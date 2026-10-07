@@ -4,7 +4,7 @@ using System.Text.Json;
 
 namespace Cloudflare.Workers.Hosting.IntegrationTests;
 
-public abstract class E2ETestBase(WorkerFixture worker)
+public abstract class IntegrationTestBase(WorkerFixture worker)
 {
     protected WorkerFixture Worker { get; } = worker;
 

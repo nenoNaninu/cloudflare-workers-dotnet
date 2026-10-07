@@ -1,7 +1,7 @@
 namespace Cloudflare.Workers.Hosting.IntegrationTests;
 
 /// <summary>Timers, concurrency, ExecutionContext.waitUntil and scheduled (cron) events.</summary>
-public class AsyncTests(WorkerFixture worker) : E2ETestBase(worker)
+public class AsyncTests(WorkerFixture worker) : IntegrationTestBase(worker)
 {
     [Fact]
     public async Task Delay_CompletesAfterTheRequestedTime()

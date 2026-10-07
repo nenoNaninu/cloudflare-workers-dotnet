@@ -5,7 +5,7 @@ using System.Text.Json;
 namespace Cloudflare.Workers.Hosting.IntegrationTests;
 
 /// <summary>Strings, bytes, headers, JSON, env and error propagation across the wasm boundary.</summary>
-public class BasicsTests(WorkerFixture worker) : E2ETestBase(worker)
+public class BasicsTests(WorkerFixture worker) : IntegrationTestBase(worker)
 {
     [Fact]
     public async Task Ping_ReturnsPong()
@@ -143,7 +143,7 @@ public class BasicsTests(WorkerFixture worker) : E2ETestBase(worker)
     {
         using var response = await Client.GetAsync("env/missing-kv", Ct);
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        Assert.Contains("E2E_NOPE", await response.Content.ReadAsStringAsync(Ct));
+        Assert.Contains("INTEGRATION_TEST_NOPE", await response.Content.ReadAsStringAsync(Ct));
     }
 
     [Fact]

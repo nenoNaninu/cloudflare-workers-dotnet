@@ -1,6 +1,6 @@
 {
-    // Tiny plain-JS Worker reached through the E2E_UPSTREAM service binding.
-    "name": "e2e-upstream",
+    // Tiny plain-JS Worker reached through the INTEGRATION_TEST_UPSTREAM service binding.
+    "name": "integration-test-upstream",
     "main": "index.js",
     "compatibility_date": "2026-07-01"
 }

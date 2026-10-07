@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace Cloudflare.Workers.Hosting.IntegrationTests;
 
 /// <summary>Outbound requests through the <c>Fetch</c> class.</summary>
-public class FetchTests(WorkerFixture worker) : E2ETestBase(worker)
+public class FetchTests(WorkerFixture worker) : IntegrationTestBase(worker)
 {
     [Fact]
     public async Task Fetch_PostsBodyAndHeaders()
@@ -16,7 +16,7 @@ public class FetchTests(WorkerFixture worker) : E2ETestBase(worker)
         Assert.Equal("/echo", json.GetProperty("path").GetString());
         Assert.Equal("?from=fetch", json.GetProperty("query").GetString());
         Assert.Equal("fetch body 🌏", json.GetProperty("body").GetString());
-        Assert.Equal("fetch", json.GetProperty("headers").GetProperty("x-e2e").GetString());
+        Assert.Equal("fetch", json.GetProperty("headers").GetProperty("x-integration-test").GetString());
     }
 
     [Fact]

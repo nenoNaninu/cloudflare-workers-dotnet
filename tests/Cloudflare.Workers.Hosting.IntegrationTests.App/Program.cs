@@ -17,8 +17,8 @@ builder.MapPost("/echo/bytes", static async c => HttpResponse.Binary(await c.Req
 
 builder.MapPost("/echo/json", static async c =>
 {
-    var person = await c.Request.ReadAsJsonAsync(E2EJsonContext.Default.Person);
-    return HttpResponse.Json(person! with { Age = person.Age + 1 }, E2EJsonContext.Default.Person);
+    var person = await c.Request.ReadAsJsonAsync(IntegrationTestJsonContext.Default.Person);
+    return HttpResponse.Json(person! with { Age = person.Age + 1 }, IntegrationTestJsonContext.Default.Person);
 });
 
 builder.MapGet("/bytes/:n", static c =>
@@ -40,7 +40,7 @@ builder.MapGet("/unicode", static _ => Task.FromResult(HttpResponse.Text("こん
 builder.MapGet("/headers", static c =>
 {
     var pairs = c.Request.Headers.Select(h => new HeaderPair(h.Key, h.Value)).ToArray();
-    return Task.FromResult(HttpResponse.Json(pairs, E2EJsonContext.Default.HeaderPairArray));
+    return Task.FromResult(HttpResponse.Json(pairs, IntegrationTestJsonContext.Default.HeaderPairArray));
 });
 
 builder.MapGet("/response-headers", static _ =>
@@ -59,17 +59,17 @@ builder.MapGet("/redirect", static _ => Task.FromResult(HttpResponse.Redirect("/
 
 builder.MapGet("/env", static c => Task.FromResult(HttpResponse.Json(
     new EnvInfo(
-        c.Env.Var("E2E_VAR"),
-        c.Env.Var("E2E_MISSING"),
-        c.Env.HasBinding("E2E_KV"),
-        c.Env.HasBinding("E2E_NOPE")),
-    E2EJsonContext.Default.EnvInfo)));
+        c.Env.Var("INTEGRATION_TEST_VAR"),
+        c.Env.Var("INTEGRATION_TEST_MISSING"),
+        c.Env.HasBinding("INTEGRATION_TEST_KV"),
+        c.Env.HasBinding("INTEGRATION_TEST_NOPE")),
+    IntegrationTestJsonContext.Default.EnvInfo)));
 
 builder.MapGet("/env/missing-kv", static c =>
 {
     try
     {
-        using var kv = c.Env.Kv("E2E_NOPE");
+        using var kv = c.Env.Kv("INTEGRATION_TEST_NOPE");
         return Task.FromResult(HttpResponse.Text("no error", 500));
     }
     catch (InvalidOperationException ex)
@@ -107,7 +107,7 @@ builder.MapGet("/parallel-delay", static async _ =>
 builder.MapGet("/wait-until/:key", static c =>
 {
     string key = c.Parameters["key"];
-    var kv = c.Env.Kv("E2E_KV");
+    var kv = c.Env.Kv("INTEGRATION_TEST_KV");
     // No Task.Run: the wasm runtime is single-threaded and has no thread pool to run it on.
     c.WorkerContext.WaitUntil(PutAfterReleaseAsync(kv, key, Upstream(c)));
 
@@ -116,7 +116,7 @@ builder.MapGet("/wait-until/:key", static c =>
 
 builder.OnScheduled(static async (evt, env, _) =>
 {
-    using var kv = env.Kv("E2E_KV");
+    using var kv = env.Kv("INTEGRATION_TEST_KV");
     await kv.PutAsync("scheduled:last", $"{evt.Cron}|{evt.ScheduledTime.ToUnixTimeMilliseconds() > 0}");
 });
 
@@ -124,7 +124,7 @@ builder.OnScheduled(static async (evt, env, _) =>
 
 builder.MapPut("/kv/:key", static async c =>
 {
-    using var kv = c.Env.Kv("E2E_KV");
+    using var kv = c.Env.Kv("INTEGRATION_TEST_KV");
     string? ttl = Query(c, "ttl");
     var options = ttl is null ? null : new KvPutOptions { ExpirationTtl = TimeSpan.FromSeconds(int.Parse(ttl)) };
     await kv.PutAsync(c.Parameters["key"], await c.Request.ReadAsStringAsync(), options);
@@ -133,35 +133,35 @@ builder.MapPut("/kv/:key", static async c =>
 
 builder.MapGet("/kv/:key", static async c =>
 {
-    using var kv = c.Env.Kv("E2E_KV");
+    using var kv = c.Env.Kv("INTEGRATION_TEST_KV");
     string? value = await kv.GetTextAsync(c.Parameters["key"]);
     return value is null ? HttpResponse.NotFound() : HttpResponse.Text(value);
 });
 
 builder.MapDelete("/kv/:key", static async c =>
 {
-    using var kv = c.Env.Kv("E2E_KV");
+    using var kv = c.Env.Kv("INTEGRATION_TEST_KV");
     await kv.DeleteAsync(c.Parameters["key"]);
     return HttpResponse.NoContent();
 });
 
 builder.MapPut("/kv-bytes/:key", static async c =>
 {
-    using var kv = c.Env.Kv("E2E_KV");
+    using var kv = c.Env.Kv("INTEGRATION_TEST_KV");
     await kv.PutAsync(c.Parameters["key"], await c.Request.ReadAsBytesAsync());
     return HttpResponse.Empty();
 });
 
 builder.MapGet("/kv-bytes/:key", static async c =>
 {
-    using var kv = c.Env.Kv("E2E_KV");
+    using var kv = c.Env.Kv("INTEGRATION_TEST_KV");
     byte[]? value = await kv.GetBytesAsync(c.Parameters["key"]);
     return value is null ? HttpResponse.NotFound() : HttpResponse.Binary(value);
 });
 
 builder.MapGet("/kv-list", static async c =>
 {
-    using var kv = c.Env.Kv("E2E_KV");
+    using var kv = c.Env.Kv("INTEGRATION_TEST_KV");
     string? limit = Query(c, "limit");
     var result = await kv.ListAsync(new KvListOptions
     {
@@ -173,44 +173,44 @@ builder.MapGet("/kv-list", static async c =>
     return HttpResponse.Json(
         new KvListInfo(result.Keys.Select(k => k.Name).ToArray(), result.ListComplete, result.Cursor,
             result.Keys.Any(k => k.Expiration is not null)),
-        E2EJsonContext.Default.KvListInfo);
+        IntegrationTestJsonContext.Default.KvListInfo);
 });
 
 // -- R2 ----------------------------------------------------------------------------------
 
 builder.MapPut("/r2/:key", static async c =>
 {
-    using var r2 = c.Env.R2("E2E_R2");
+    using var r2 = c.Env.R2("INTEGRATION_TEST_R2");
     using var put = await r2.PutAsync(c.Parameters["key"], await c.Request.ReadAsBytesAsync());
-    return HttpResponse.Json(new R2Info(put.Key, put.Size, put.Etag), E2EJsonContext.Default.R2Info);
+    return HttpResponse.Json(new R2Info(put.Key, put.Size, put.Etag), IntegrationTestJsonContext.Default.R2Info);
 });
 
 builder.MapGet("/r2/:key", static async c =>
 {
-    using var r2 = c.Env.R2("E2E_R2");
+    using var r2 = c.Env.R2("INTEGRATION_TEST_R2");
     using var obj = await r2.GetAsync(c.Parameters["key"]);
     return obj is null ? HttpResponse.NotFound() : HttpResponse.Binary(await obj.BodyBytesAsync());
 });
 
 builder.MapGet("/r2/:key/text", static async c =>
 {
-    using var r2 = c.Env.R2("E2E_R2");
+    using var r2 = c.Env.R2("INTEGRATION_TEST_R2");
     using var obj = await r2.GetAsync(c.Parameters["key"]);
     return obj is null ? HttpResponse.NotFound() : HttpResponse.Text(await obj.BodyTextAsync());
 });
 
 builder.MapGet("/r2/:key/head", static async c =>
 {
-    using var r2 = c.Env.R2("E2E_R2");
+    using var r2 = c.Env.R2("INTEGRATION_TEST_R2");
     using var obj = await r2.HeadAsync(c.Parameters["key"]);
     return obj is null
         ? HttpResponse.NotFound()
-        : HttpResponse.Json(new R2Info(obj.Key, obj.Size, obj.Etag), E2EJsonContext.Default.R2Info);
+        : HttpResponse.Json(new R2Info(obj.Key, obj.Size, obj.Etag), IntegrationTestJsonContext.Default.R2Info);
 });
 
 builder.MapDelete("/r2/:key", static async c =>
 {
-    using var r2 = c.Env.R2("E2E_R2");
+    using var r2 = c.Env.R2("INTEGRATION_TEST_R2");
     await r2.DeleteAsync(c.Parameters["key"]);
     return HttpResponse.NoContent();
 });
@@ -219,7 +219,7 @@ builder.MapDelete("/r2/:key", static async c =>
 
 builder.MapPost("/d1/reset", static async c =>
 {
-    using var db = c.Env.D1("E2E_DB");
+    using var db = c.Env.D1("INTEGRATION_TEST_DB");
     using (var create = db.Prepare(
         "CREATE TABLE IF NOT EXISTS items (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, price REAL, note TEXT)"))
     {
@@ -233,34 +233,34 @@ builder.MapPost("/d1/reset", static async c =>
 
 builder.MapPost("/d1/items", static async c =>
 {
-    var item = (await c.Request.ReadAsJsonAsync(E2EJsonContext.Default.Item))!;
-    using var db = c.Env.D1("E2E_DB");
+    var item = (await c.Request.ReadAsJsonAsync(IntegrationTestJsonContext.Default.Item))!;
+    using var db = c.Env.D1("INTEGRATION_TEST_DB");
     using var insert = db.Prepare("INSERT INTO items (name, price, note) VALUES (?1, ?2, ?3)")
         .Bind(JsArg.From(item.Name), JsArg.From(item.Price), item.Note is null ? JsArg.Null : JsArg.From(item.Note));
     var result = await insert.RunAsync();
     return HttpResponse.Json(
         new D1RunInfo(result.IsSuccess, result.Changes, result.LastRowId),
-        E2EJsonContext.Default.D1RunInfo);
+        IntegrationTestJsonContext.Default.D1RunInfo);
 });
 
 builder.MapGet("/d1/items", static async c =>
 {
-    using var db = c.Env.D1("E2E_DB");
+    using var db = c.Env.D1("INTEGRATION_TEST_DB");
     using var select = db.Prepare("SELECT id, name, price, note FROM items ORDER BY id");
     return HttpResponse.Json(await select.AllJsonAsync());
 });
 
 builder.MapGet("/d1/items/typed", static async c =>
 {
-    using var db = c.Env.D1("E2E_DB");
+    using var db = c.Env.D1("INTEGRATION_TEST_DB");
     using var select = db.Prepare("SELECT id, name, price, note FROM items ORDER BY id");
-    var items = await select.AllAsync(E2EJsonContext.Default.ItemRowArray) ?? [];
-    return HttpResponse.Json(items, E2EJsonContext.Default.ItemRowArray);
+    var items = await select.AllAsync(IntegrationTestJsonContext.Default.ItemRowArray) ?? [];
+    return HttpResponse.Json(items, IntegrationTestJsonContext.Default.ItemRowArray);
 });
 
 builder.MapGet("/d1/items/:id", static async c =>
 {
-    using var db = c.Env.D1("E2E_DB");
+    using var db = c.Env.D1("INTEGRATION_TEST_DB");
     using var select = db.Prepare("SELECT id, name, price, note FROM items WHERE id = ?1")
         .Bind(JsArg.From(int.Parse(c.Parameters["id"])));
     string? json = await select.FirstJsonAsync();
@@ -269,7 +269,7 @@ builder.MapGet("/d1/items/:id", static async c =>
 
 builder.MapGet("/d1/invalid", static async c =>
 {
-    using var db = c.Env.D1("E2E_DB");
+    using var db = c.Env.D1("INTEGRATION_TEST_DB");
     using var bad = db.Prepare("SELECT * FROM no_such_table");
     try
     {
@@ -286,7 +286,7 @@ builder.MapGet("/d1/invalid", static async c =>
 
 builder.MapPost("/service/echo", static async c =>
 {
-    using var upstream = c.Env.Service("E2E_UPSTREAM");
+    using var upstream = c.Env.Service("INTEGRATION_TEST_UPSTREAM");
     using var response = await upstream.FetchAsync(new FetchRequestMessage("http://upstream/echo")
     {
         Method = "POST",
@@ -305,7 +305,7 @@ builder.MapPost("/fetch/echo", static async c =>
         Method = "POST",
         Body = await c.Request.ReadAsStringAsync(),
     };
-    request.Headers.Add("x-e2e", "fetch");
+    request.Headers.Add("x-integration-test", "fetch");
     request.Headers.Add("content-type", "text/plain");
 
     using var response = await Fetch.FetchAsync(request);
@@ -318,7 +318,7 @@ builder.MapGet("/fetch/headers", static async c =>
     var headers = response.ReadHeaders();
     return HttpResponse.Json(
         new FetchHeadersInfo(response.StatusCode, headers.Get("x-upstream"), headers.Get("x-multi"), headers.Get("content-type")),
-        E2EJsonContext.Default.FetchHeadersInfo);
+        IntegrationTestJsonContext.Default.FetchHeadersInfo);
 });
 
 builder.MapGet("/fetch/redirect/:mode", static async c =>
@@ -353,8 +353,8 @@ builder.MapGet("/fetch/bytes", static async c =>
 builder.MapGet("/fetch/json", static async c =>
 {
     using var response = await Fetch.FetchAsync(Upstream(c) + "/json");
-    var person = await response.ReadAsJsonAsync(E2EJsonContext.Default.Person);
-    return HttpResponse.Json(person!, E2EJsonContext.Default.Person);
+    var person = await response.ReadAsJsonAsync(IntegrationTestJsonContext.Default.Person);
+    return HttpResponse.Json(person!, IntegrationTestJsonContext.Default.Person);
 });
 
 builder.MapGet("/fetch/unreachable", static async _ =>
@@ -376,7 +376,7 @@ builder.MapGet("/fetch/unreachable", static async _ =>
 builder.MapGet("/stress/handles/:n", static async c =>
 {
     int n = int.Parse(c.Parameters["n"]);
-    using var kv = c.Env.Kv("E2E_KV");
+    using var kv = c.Env.Kv("INTEGRATION_TEST_KV");
     for (int i = 0; i < n; i++)
     {
         await kv.PutAsync("stress:" + (i % 10), "value-" + i);
@@ -487,4 +487,4 @@ public sealed record FetchHeadersInfo(
 [JsonSerializable(typeof(ItemRow[]))]
 [JsonSerializable(typeof(D1RunInfo))]
 [JsonSerializable(typeof(FetchHeadersInfo))]
-public sealed partial class E2EJsonContext : JsonSerializerContext;
+public sealed partial class IntegrationTestJsonContext : JsonSerializerContext;

@@ -4,7 +4,7 @@ using System.Text.Json;
 
 namespace Cloudflare.Workers.Hosting.IntegrationTests;
 
-public class KvTests(WorkerFixture worker) : E2ETestBase(worker)
+public class KvTests(WorkerFixture worker) : IntegrationTestBase(worker)
 {
     [Fact]
     public async Task PutGetDelete_Text()
@@ -81,7 +81,7 @@ public class KvTests(WorkerFixture worker) : E2ETestBase(worker)
     }
 }
 
-public class R2Tests(WorkerFixture worker) : E2ETestBase(worker)
+public class R2Tests(WorkerFixture worker) : IntegrationTestBase(worker)
 {
     [Fact]
     public async Task PutGetHeadDelete()
@@ -125,7 +125,7 @@ public class R2Tests(WorkerFixture worker) : E2ETestBase(worker)
     }
 }
 
-public class D1Tests(WorkerFixture worker) : E2ETestBase(worker)
+public class D1Tests(WorkerFixture worker) : IntegrationTestBase(worker)
 {
     // The tests share one table; run them one after another.
     private static readonly SemaphoreSlim TableLock = new(1, 1);
@@ -185,7 +185,7 @@ public class D1Tests(WorkerFixture worker) : E2ETestBase(worker)
     }
 }
 
-public class ServiceBindingTests(WorkerFixture worker) : E2ETestBase(worker)
+public class ServiceBindingTests(WorkerFixture worker) : IntegrationTestBase(worker)
 {
     [Fact]
     public async Task FetchAsync_CallsAnotherWorker()
