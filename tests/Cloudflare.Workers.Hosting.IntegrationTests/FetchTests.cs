@@ -6,7 +6,7 @@ namespace Cloudflare.Workers.Hosting.IntegrationTests;
 /// <summary>Outbound requests through the <c>Fetch</c> class.</summary>
 public class FetchTests(WorkerFixture worker) : E2ETestBase(worker)
 {
-    [E2EFact]
+    [Fact]
     public async Task Fetch_PostsBodyAndHeaders()
     {
         using var response = await Client.PostAsync("fetch/echo", Text("fetch body 🌏"), Ct);
@@ -19,7 +19,7 @@ public class FetchTests(WorkerFixture worker) : E2ETestBase(worker)
         Assert.Equal("fetch", json.GetProperty("headers").GetProperty("x-e2e").GetString());
     }
 
-    [E2EFact]
+    [Fact]
     public async Task Fetch_ReadsResponseHeaders()
     {
         var json = await GetJsonAsync("fetch/headers");
@@ -29,7 +29,7 @@ public class FetchTests(WorkerFixture worker) : E2ETestBase(worker)
         Assert.StartsWith("text/plain", json.GetProperty("contentType").GetString());
     }
 
-    [E2EFact]
+    [Fact]
     public async Task Fetch_ReadsBinaryAndJsonBodies()
     {
         Assert.Equal(
@@ -41,7 +41,7 @@ public class FetchTests(WorkerFixture worker) : E2ETestBase(worker)
         Assert.Equal(36, person.GetProperty("age").GetInt32());
     }
 
-    [E2EFact]
+    [Fact]
     public async Task Fetch_RedirectModes()
     {
         // Follow: the runtime lands on /echo?redirected=1
@@ -58,7 +58,7 @@ public class FetchTests(WorkerFixture worker) : E2ETestBase(worker)
         Assert.Equal(HttpStatusCode.BadGateway, error.StatusCode);
     }
 
-    [E2EFact]
+    [Fact]
     public async Task Fetch_NetworkFailure_ThrowsJsException()
     {
         using var response = await Client.GetAsync("fetch/unreachable", Ct);

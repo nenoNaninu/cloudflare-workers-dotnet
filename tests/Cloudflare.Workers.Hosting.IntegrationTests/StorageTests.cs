@@ -6,7 +6,7 @@ namespace Cloudflare.Workers.Hosting.IntegrationTests;
 
 public class KvTests(WorkerFixture worker) : E2ETestBase(worker)
 {
-    [E2EFact]
+    [Fact]
     public async Task PutGetDelete_Text()
     {
         string key = UniqueKey();
@@ -25,7 +25,7 @@ public class KvTests(WorkerFixture worker) : E2ETestBase(worker)
         Assert.Equal(HttpStatusCode.NotFound, gone.StatusCode);
     }
 
-    [E2EFact]
+    [Fact]
     public async Task PutGet_Bytes()
     {
         string key = UniqueKey();
@@ -36,7 +36,7 @@ public class KvTests(WorkerFixture worker) : E2ETestBase(worker)
         Assert.Equal(bytes, await Client.GetByteArrayAsync($"kv-bytes/{key}", Ct));
     }
 
-    [E2EFact]
+    [Fact]
     public async Task List_FiltersByPrefix_AndPaginates()
     {
         string prefix = UniqueKey("list") + "-";
@@ -69,7 +69,7 @@ public class KvTests(WorkerFixture worker) : E2ETestBase(worker)
         Assert.Equal(Enumerable.Range(0, 5).Select(i => $"{prefix}{i}"), seen);
     }
 
-    [E2EFact]
+    [Fact]
     public async Task ExpirationTtl_IsReportedByList()
     {
         string key = UniqueKey("ttl");
@@ -83,7 +83,7 @@ public class KvTests(WorkerFixture worker) : E2ETestBase(worker)
 
 public class R2Tests(WorkerFixture worker) : E2ETestBase(worker)
 {
-    [E2EFact]
+    [Fact]
     public async Task PutGetHeadDelete()
     {
         string key = UniqueKey("obj");
@@ -112,7 +112,7 @@ public class R2Tests(WorkerFixture worker) : E2ETestBase(worker)
         Assert.Equal(HttpStatusCode.NotFound, gone.StatusCode);
     }
 
-    [E2EFact]
+    [Fact]
     public async Task LargeObject_RoundTrips()
     {
         string key = UniqueKey("big");
@@ -136,7 +136,7 @@ public class D1Tests(WorkerFixture worker) : E2ETestBase(worker)
         Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync(Ct));
     }
 
-    [E2EFact]
+    [Fact]
     public async Task InsertAndQuery_UsesBoundParametersAndReturnsTypedRows()
     {
         await TableLock.WaitAsync(Ct);
@@ -176,7 +176,7 @@ public class D1Tests(WorkerFixture worker) : E2ETestBase(worker)
         }
     }
 
-    [E2EFact]
+    [Fact]
     public async Task InvalidSql_SurfacesAsAnException()
     {
         using var response = await Client.GetAsync("d1/invalid", Ct);
@@ -187,7 +187,7 @@ public class D1Tests(WorkerFixture worker) : E2ETestBase(worker)
 
 public class ServiceBindingTests(WorkerFixture worker) : E2ETestBase(worker)
 {
-    [E2EFact]
+    [Fact]
     public async Task FetchAsync_CallsAnotherWorker()
     {
         using var response = await Client.PostAsync("service/echo", Text("hello upstream 🌏"), Ct);

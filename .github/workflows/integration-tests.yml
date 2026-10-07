@@ -61,8 +61,6 @@ jobs:
         working-directory: tests/Cloudflare.Workers.Hosting.IntegrationTests.App
 
       - name: Run integration tests
-        env:
-          CLOUDFLARE_E2E: "1"
         run: dotnet test tests/Cloudflare.Workers.Hosting.IntegrationTests/Cloudflare.Workers.Hosting.IntegrationTests.csproj --configuration Release
 
       - name: Upload wrangler log

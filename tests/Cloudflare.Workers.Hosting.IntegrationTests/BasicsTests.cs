@@ -7,26 +7,26 @@ namespace Cloudflare.Workers.Hosting.IntegrationTests;
 /// <summary>Strings, bytes, headers, JSON, env and error propagation across the wasm boundary.</summary>
 public class BasicsTests(WorkerFixture worker) : E2ETestBase(worker)
 {
-    [E2EFact]
+    [Fact]
     public async Task Ping_ReturnsPong()
     {
         Assert.Equal("pong", await Client.GetStringAsync("ping", Ct));
     }
 
-    [E2EFact]
+    [Fact]
     public async Task UnknownRoute_Returns404()
     {
         using var response = await Client.GetAsync("does-not-exist", Ct);
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
-    [E2EFact]
+    [Fact]
     public async Task Unicode_ResponseIsDecodedCorrectly()
     {
         Assert.Equal("こんにちは 🌏 café", await Client.GetStringAsync("unicode", Ct));
     }
 
-    [E2EFact]
+    [Fact]
     public async Task EchoText_RoundTripsUnicode()
     {
         const string text = "日本語 / emoji 😀🚀 / ñ / \0 nul / \r\n";
@@ -34,14 +34,14 @@ public class BasicsTests(WorkerFixture worker) : E2ETestBase(worker)
         Assert.Equal(text, await response.Content.ReadAsStringAsync(Ct));
     }
 
-    [E2EFact]
+    [Fact]
     public async Task EchoText_EmptyBody()
     {
         using var response = await Client.PostAsync("echo/text", Text(string.Empty), Ct);
         Assert.Equal(string.Empty, await response.Content.ReadAsStringAsync(Ct));
     }
 
-    [E2EFact]
+    [Fact]
     public async Task EchoText_LargeBody()
     {
         string text = new string('a', 1_000_000) + "終";
@@ -49,7 +49,7 @@ public class BasicsTests(WorkerFixture worker) : E2ETestBase(worker)
         Assert.Equal(text, await response.Content.ReadAsStringAsync(Ct));
     }
 
-    [E2EFact]
+    [Fact]
     public async Task EchoBytes_AllByteValuesSurvive()
     {
         var bytes = Enumerable.Range(0, 256).Select(i => (byte)i).ToArray();
@@ -58,7 +58,7 @@ public class BasicsTests(WorkerFixture worker) : E2ETestBase(worker)
         Assert.Equal(bytes, await response.Content.ReadAsByteArrayAsync(Ct));
     }
 
-    [E2EFact]
+    [Fact]
     public async Task EchoBytes_LargeRandomBody()
     {
         var bytes = new byte[2 * 1024 * 1024];
@@ -67,14 +67,14 @@ public class BasicsTests(WorkerFixture worker) : E2ETestBase(worker)
         Assert.Equal(bytes, await response.Content.ReadAsByteArrayAsync(Ct));
     }
 
-    [E2EFact]
+    [Fact]
     public async Task EchoBytes_EmptyBody()
     {
         using var response = await Client.PostAsync("echo/bytes", new ByteArrayContent([]), Ct);
         Assert.Empty(await response.Content.ReadAsByteArrayAsync(Ct));
     }
 
-    [E2EFact]
+    [Fact]
     public async Task Bytes_GeneratedByWorker()
     {
         var bytes = await Client.GetByteArrayAsync("bytes/100000", Ct);
@@ -84,7 +84,7 @@ public class BasicsTests(WorkerFixture worker) : E2ETestBase(worker)
         Assert.Empty(await Client.GetByteArrayAsync("bytes/0", Ct));
     }
 
-    [E2EFact]
+    [Fact]
     public async Task Json_IsDeserializedAndSerializedByTheWorker()
     {
         using var response = await Client.PostAsJsonAsync("echo/json", new { name = "Ada", age = 36 }, Ct);
@@ -93,7 +93,7 @@ public class BasicsTests(WorkerFixture worker) : E2ETestBase(worker)
         Assert.Equal(37, json.GetProperty("age").GetInt32());
     }
 
-    [E2EFact]
+    [Fact]
     public async Task RequestHeaders_AreVisibleToTheWorker()
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, "headers");
@@ -110,7 +110,7 @@ public class BasicsTests(WorkerFixture worker) : E2ETestBase(worker)
         Assert.Equal("two", headers["x-custom-two"]);
     }
 
-    [E2EFact]
+    [Fact]
     public async Task ResponseHeaders_AndStatusAreApplied()
     {
         using var response = await Client.GetAsync("response-headers", Ct);
@@ -120,7 +120,7 @@ public class BasicsTests(WorkerFixture worker) : E2ETestBase(worker)
         Assert.Equal("a, b", string.Join(", ", response.Headers.GetValues("x-multi")));
     }
 
-    [E2EFact]
+    [Fact]
     public async Task Redirect_IsReturnedWithLocation()
     {
         using var response = await Client.GetAsync("redirect", Ct);
@@ -128,7 +128,7 @@ public class BasicsTests(WorkerFixture worker) : E2ETestBase(worker)
         Assert.Equal("/ping", response.Headers.Location?.OriginalString);
     }
 
-    [E2EFact]
+    [Fact]
     public async Task Env_ReadsVarsAndBindings()
     {
         var json = await GetJsonAsync("env");
@@ -138,7 +138,7 @@ public class BasicsTests(WorkerFixture worker) : E2ETestBase(worker)
         Assert.False(json.GetProperty("hasNope").GetBoolean());
     }
 
-    [E2EFact]
+    [Fact]
     public async Task Env_MissingBindingThrows()
     {
         using var response = await Client.GetAsync("env/missing-kv", Ct);
@@ -146,7 +146,7 @@ public class BasicsTests(WorkerFixture worker) : E2ETestBase(worker)
         Assert.Contains("E2E_NOPE", await response.Content.ReadAsStringAsync(Ct));
     }
 
-    [E2EFact]
+    [Fact]
     public async Task HandlerException_BecomesAnErrorResponse_AndWorkerKeepsServing()
     {
         using var thrown = await Client.GetAsync("throw", Ct);

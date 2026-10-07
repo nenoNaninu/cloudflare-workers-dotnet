@@ -25,18 +25,16 @@ public sealed class WorkerFixture : IAsyncLifetime
     private bool _stopping;
     private UpstreamServer? _upstream;
 
-    public static bool Enabled => Environment.GetEnvironmentVariable("CLOUDFLARE_E2E") == "1";
-
     /// <summary>Client for the worker under test. Redirects are not followed.</summary>
     public HttpClient Client { get; private set; } = null!;
 
     public Uri BaseAddress { get; private set; } = null!;
 
     /// <summary>Base URL of the local HTTP server the worker calls out to.</summary>
-    public string UpstreamUrl => _upstream?.BaseUrl ?? throw new InvalidOperationException("E2E tests are disabled.");
+    public string UpstreamUrl => _upstream?.BaseUrl ?? throw new InvalidOperationException("The upstream server has not been initialized.");
 
     public UpstreamServer.WaitUntilGate CreateWaitUntilGate(string key)
-        => (_upstream ?? throw new InvalidOperationException("E2E tests are disabled.")).CreateWaitUntilGate(key);
+        => (_upstream ?? throw new InvalidOperationException("The upstream server has not been initialized.")).CreateWaitUntilGate(key);
 
     public string WranglerLog
     {
@@ -51,11 +49,6 @@ public sealed class WorkerFixture : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        if (!Enabled)
-        {
-            return;
-        }
-
         string workerDirectory = Path.Combine(FindRepositoryRoot(), "tests", "Cloudflare.Workers.Hosting.IntegrationTests.App");
         string wrangler = Path.Combine(workerDirectory, "node_modules", "wrangler", "bin", "wrangler.js");
         string publishedWorker = Path.Combine(workerDirectory, "bin", "Release", "net10.0", "wasi-wasm", "publish", "worker", "index.js");

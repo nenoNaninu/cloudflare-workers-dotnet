@@ -7,8 +7,6 @@
         <IsTestProject>true</IsTestProject>
         <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
         <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
-        <!-- All tests are skipped (exit code 8) unless CLOUDFLARE_E2E=1; that is not a failure. -->
-        <TestingPlatformCommandLineArguments>--ignore-exit-code 8</TestingPlatformCommandLineArguments>
     </PropertyGroup>
 
     <ItemGroup>
