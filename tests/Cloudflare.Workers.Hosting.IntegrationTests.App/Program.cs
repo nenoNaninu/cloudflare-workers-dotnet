@@ -11,19 +11,19 @@ var builder = WorkerApplication.CreateBuilder();
 
 builder.MapGet("/ping", static _ => Task.FromResult(HttpResponse.Text("pong")));
 
-builder.MapPost("/echo/text", static async c => HttpResponse.Text(await c.Request.ReadAsStringAsync()));
+builder.MapPost("/echo/text", static async ctx => HttpResponse.Text(await ctx.Request.ReadAsStringAsync()));
 
-builder.MapPost("/echo/bytes", static async c => HttpResponse.Binary(await c.Request.ReadAsBytesAsync()));
+builder.MapPost("/echo/bytes", static async ctx => HttpResponse.Binary(await ctx.Request.ReadAsBytesAsync()));
 
-builder.MapPost("/echo/json", static async c =>
+builder.MapPost("/echo/json", static async ctx =>
 {
-    var person = await c.Request.ReadAsJsonAsync(IntegrationTestJsonContext.Default.Person);
+    var person = await ctx.Request.ReadAsJsonAsync(IntegrationTestJsonContext.Default.Person);
     return HttpResponse.Json(person! with { Age = person.Age + 1 }, IntegrationTestJsonContext.Default.Person);
 });
 
-builder.MapGet("/bytes/:n", static c =>
+builder.MapGet("/bytes/:n", static ctx =>
 {
-    int n = int.Parse(c.Parameters["n"]);
+    int n = int.Parse(ctx.Parameters["n"]);
     var bytes = new byte[n];
     for (int i = 0; i < n; i++)
     {
@@ -37,9 +37,9 @@ builder.MapGet("/unicode", static _ => Task.FromResult(HttpResponse.Text("こん
 
 // -- request / response headers ----------------------------------------------------------
 
-builder.MapGet("/headers", static c =>
+builder.MapGet("/headers", static ctx =>
 {
-    var pairs = c.Request.Headers.Select(h => new HeaderPair(h.Key, h.Value)).ToArray();
+    var pairs = ctx.Request.Headers.Select(h => new HeaderPair(h.Key, h.Value)).ToArray();
     return Task.FromResult(HttpResponse.Json(pairs, IntegrationTestJsonContext.Default.HeaderPairArray));
 });
 
@@ -57,19 +57,19 @@ builder.MapGet("/redirect", static _ => Task.FromResult(HttpResponse.Redirect("/
 
 // -- env / errors ------------------------------------------------------------------------
 
-builder.MapGet("/env", static c => Task.FromResult(HttpResponse.Json(
+builder.MapGet("/env", static ctx => Task.FromResult(HttpResponse.Json(
     new EnvInfo(
-        c.Env.Var("INTEGRATION_TEST_VAR"),
-        c.Env.Var("INTEGRATION_TEST_MISSING"),
-        c.Env.HasBinding("INTEGRATION_TEST_KV"),
-        c.Env.HasBinding("INTEGRATION_TEST_NOPE")),
+        ctx.Env.Var("INTEGRATION_TEST_VAR"),
+        ctx.Env.Var("INTEGRATION_TEST_MISSING"),
+        ctx.Env.HasBinding("INTEGRATION_TEST_KV"),
+        ctx.Env.HasBinding("INTEGRATION_TEST_NOPE")),
     IntegrationTestJsonContext.Default.EnvInfo)));
 
-builder.MapGet("/env/missing-kv", static c =>
+builder.MapGet("/env/missing-kv", static ctx =>
 {
     try
     {
-        using var kv = c.Env.Kv("INTEGRATION_TEST_NOPE");
+        using var kv = ctx.Env.Kv("INTEGRATION_TEST_NOPE");
         return Task.FromResult(HttpResponse.Text("no error", 500));
     }
     catch (InvalidOperationException ex)
@@ -88,9 +88,9 @@ builder.MapGet("/throw-async", static async _ =>
 
 // -- promises / timers / waitUntil ---------------------------------------------------------
 
-builder.MapGet("/delay/:ms", static async c =>
+builder.MapGet("/delay/:ms", static async ctx =>
 {
-    double ms = double.Parse(c.Parameters["ms"]);
+    double ms = double.Parse(ctx.Parameters["ms"]);
     await WorkerTimer.Delay(ms);
     return HttpResponse.Text($"slept {ms}");
 });
@@ -104,12 +104,12 @@ builder.MapGet("/parallel-delay", static async _ =>
     return HttpResponse.Text(((int)elapsed).ToString());
 });
 
-builder.MapGet("/wait-until/:key", static c =>
+builder.MapGet("/wait-until/:key", static ctx =>
 {
-    string key = c.Parameters["key"];
-    var kv = c.Env.Kv("INTEGRATION_TEST_KV");
+    string key = ctx.Parameters["key"];
+    var kv = ctx.Env.Kv("INTEGRATION_TEST_KV");
     // No Task.Run: the wasm runtime is single-threaded and has no thread pool to run it on.
-    c.WorkerContext.WaitUntil(PutAfterReleaseAsync(kv, key, Upstream(c)));
+    ctx.WorkerContext.WaitUntil(PutAfterReleaseAsync(kv, key, Upstream(ctx)));
 
     return Task.FromResult(HttpResponse.Text("accepted", 202));
 });
@@ -122,52 +122,52 @@ builder.OnScheduled(static async (evt, env, _) =>
 
 // -- KV ----------------------------------------------------------------------------------
 
-builder.MapPut("/kv/:key", static async c =>
+builder.MapPut("/kv/:key", static async ctx =>
 {
-    using var kv = c.Env.Kv("INTEGRATION_TEST_KV");
-    string? ttl = Query(c, "ttl");
+    using var kv = ctx.Env.Kv("INTEGRATION_TEST_KV");
+    string? ttl = Query(ctx, "ttl");
     var options = ttl is null ? null : new KvPutOptions { ExpirationTtl = TimeSpan.FromSeconds(int.Parse(ttl)) };
-    await kv.PutAsync(c.Parameters["key"], await c.Request.ReadAsStringAsync(), options);
+    await kv.PutAsync(ctx.Parameters["key"], await ctx.Request.ReadAsStringAsync(), options);
     return HttpResponse.Empty();
 });
 
-builder.MapGet("/kv/:key", static async c =>
+builder.MapGet("/kv/:key", static async ctx =>
 {
-    using var kv = c.Env.Kv("INTEGRATION_TEST_KV");
-    string? value = await kv.GetTextAsync(c.Parameters["key"]);
+    using var kv = ctx.Env.Kv("INTEGRATION_TEST_KV");
+    string? value = await kv.GetTextAsync(ctx.Parameters["key"]);
     return value is null ? HttpResponse.NotFound() : HttpResponse.Text(value);
 });
 
-builder.MapDelete("/kv/:key", static async c =>
+builder.MapDelete("/kv/:key", static async ctx =>
 {
-    using var kv = c.Env.Kv("INTEGRATION_TEST_KV");
-    await kv.DeleteAsync(c.Parameters["key"]);
+    using var kv = ctx.Env.Kv("INTEGRATION_TEST_KV");
+    await kv.DeleteAsync(ctx.Parameters["key"]);
     return HttpResponse.NoContent();
 });
 
-builder.MapPut("/kv-bytes/:key", static async c =>
+builder.MapPut("/kv-bytes/:key", static async ctx =>
 {
-    using var kv = c.Env.Kv("INTEGRATION_TEST_KV");
-    await kv.PutAsync(c.Parameters["key"], await c.Request.ReadAsBytesAsync());
+    using var kv = ctx.Env.Kv("INTEGRATION_TEST_KV");
+    await kv.PutAsync(ctx.Parameters["key"], await ctx.Request.ReadAsBytesAsync());
     return HttpResponse.Empty();
 });
 
-builder.MapGet("/kv-bytes/:key", static async c =>
+builder.MapGet("/kv-bytes/:key", static async ctx =>
 {
-    using var kv = c.Env.Kv("INTEGRATION_TEST_KV");
-    byte[]? value = await kv.GetBytesAsync(c.Parameters["key"]);
+    using var kv = ctx.Env.Kv("INTEGRATION_TEST_KV");
+    byte[]? value = await kv.GetBytesAsync(ctx.Parameters["key"]);
     return value is null ? HttpResponse.NotFound() : HttpResponse.Binary(value);
 });
 
-builder.MapGet("/kv-list", static async c =>
+builder.MapGet("/kv-list", static async ctx =>
 {
-    using var kv = c.Env.Kv("INTEGRATION_TEST_KV");
-    string? limit = Query(c, "limit");
+    using var kv = ctx.Env.Kv("INTEGRATION_TEST_KV");
+    string? limit = Query(ctx, "limit");
     var result = await kv.ListAsync(new KvListOptions
     {
-        Prefix = Query(c, "prefix"),
+        Prefix = Query(ctx, "prefix"),
         Limit = limit is null ? null : int.Parse(limit),
-        Cursor = Query(c, "cursor"),
+        Cursor = Query(ctx, "cursor"),
     });
 
     return HttpResponse.Json(
@@ -178,48 +178,48 @@ builder.MapGet("/kv-list", static async c =>
 
 // -- R2 ----------------------------------------------------------------------------------
 
-builder.MapPut("/r2/:key", static async c =>
+builder.MapPut("/r2/:key", static async ctx =>
 {
-    using var r2 = c.Env.R2("INTEGRATION_TEST_R2");
-    using var put = await r2.PutAsync(c.Parameters["key"], await c.Request.ReadAsBytesAsync());
+    using var r2 = ctx.Env.R2("INTEGRATION_TEST_R2");
+    using var put = await r2.PutAsync(ctx.Parameters["key"], await ctx.Request.ReadAsBytesAsync());
     return HttpResponse.Json(new R2Info(put.Key, put.Size, put.Etag), IntegrationTestJsonContext.Default.R2Info);
 });
 
-builder.MapGet("/r2/:key", static async c =>
+builder.MapGet("/r2/:key", static async ctx =>
 {
-    using var r2 = c.Env.R2("INTEGRATION_TEST_R2");
-    using var obj = await r2.GetAsync(c.Parameters["key"]);
+    using var r2 = ctx.Env.R2("INTEGRATION_TEST_R2");
+    using var obj = await r2.GetAsync(ctx.Parameters["key"]);
     return obj is null ? HttpResponse.NotFound() : HttpResponse.Binary(await obj.BodyBytesAsync());
 });
 
-builder.MapGet("/r2/:key/text", static async c =>
+builder.MapGet("/r2/:key/text", static async ctx =>
 {
-    using var r2 = c.Env.R2("INTEGRATION_TEST_R2");
-    using var obj = await r2.GetAsync(c.Parameters["key"]);
+    using var r2 = ctx.Env.R2("INTEGRATION_TEST_R2");
+    using var obj = await r2.GetAsync(ctx.Parameters["key"]);
     return obj is null ? HttpResponse.NotFound() : HttpResponse.Text(await obj.BodyTextAsync());
 });
 
-builder.MapGet("/r2/:key/head", static async c =>
+builder.MapGet("/r2/:key/head", static async ctx =>
 {
-    using var r2 = c.Env.R2("INTEGRATION_TEST_R2");
-    using var obj = await r2.HeadAsync(c.Parameters["key"]);
+    using var r2 = ctx.Env.R2("INTEGRATION_TEST_R2");
+    using var obj = await r2.HeadAsync(ctx.Parameters["key"]);
     return obj is null
         ? HttpResponse.NotFound()
         : HttpResponse.Json(new R2Info(obj.Key, obj.Size, obj.Etag), IntegrationTestJsonContext.Default.R2Info);
 });
 
-builder.MapDelete("/r2/:key", static async c =>
+builder.MapDelete("/r2/:key", static async ctx =>
 {
-    using var r2 = c.Env.R2("INTEGRATION_TEST_R2");
-    await r2.DeleteAsync(c.Parameters["key"]);
+    using var r2 = ctx.Env.R2("INTEGRATION_TEST_R2");
+    await r2.DeleteAsync(ctx.Parameters["key"]);
     return HttpResponse.NoContent();
 });
 
 // -- D1 ----------------------------------------------------------------------------------
 
-builder.MapPost("/d1/reset", static async c =>
+builder.MapPost("/d1/reset", static async ctx =>
 {
-    using var db = c.Env.D1("INTEGRATION_TEST_DB");
+    using var db = ctx.Env.D1("INTEGRATION_TEST_DB");
     using (var create = db.Prepare(
         "CREATE TABLE IF NOT EXISTS items (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, price REAL, note TEXT)"))
     {
@@ -231,10 +231,10 @@ builder.MapPost("/d1/reset", static async c =>
     return HttpResponse.Empty();
 });
 
-builder.MapPost("/d1/items", static async c =>
+builder.MapPost("/d1/items", static async ctx =>
 {
-    var item = (await c.Request.ReadAsJsonAsync(IntegrationTestJsonContext.Default.Item))!;
-    using var db = c.Env.D1("INTEGRATION_TEST_DB");
+    var item = (await ctx.Request.ReadAsJsonAsync(IntegrationTestJsonContext.Default.Item))!;
+    using var db = ctx.Env.D1("INTEGRATION_TEST_DB");
     using var insert = db.Prepare("INSERT INTO items (name, price, note) VALUES (?1, ?2, ?3)")
         .Bind(JsArg.From(item.Name), JsArg.From(item.Price), item.Note is null ? JsArg.Null : JsArg.From(item.Note));
     var result = await insert.RunAsync();
@@ -243,33 +243,33 @@ builder.MapPost("/d1/items", static async c =>
         IntegrationTestJsonContext.Default.D1RunInfo);
 });
 
-builder.MapGet("/d1/items", static async c =>
+builder.MapGet("/d1/items", static async ctx =>
 {
-    using var db = c.Env.D1("INTEGRATION_TEST_DB");
+    using var db = ctx.Env.D1("INTEGRATION_TEST_DB");
     using var select = db.Prepare("SELECT id, name, price, note FROM items ORDER BY id");
     return HttpResponse.Json(await select.AllJsonAsync());
 });
 
-builder.MapGet("/d1/items/typed", static async c =>
+builder.MapGet("/d1/items/typed", static async ctx =>
 {
-    using var db = c.Env.D1("INTEGRATION_TEST_DB");
+    using var db = ctx.Env.D1("INTEGRATION_TEST_DB");
     using var select = db.Prepare("SELECT id, name, price, note FROM items ORDER BY id");
     var items = await select.AllAsync(IntegrationTestJsonContext.Default.ItemRowArray) ?? [];
     return HttpResponse.Json(items, IntegrationTestJsonContext.Default.ItemRowArray);
 });
 
-builder.MapGet("/d1/items/:id", static async c =>
+builder.MapGet("/d1/items/:id", static async ctx =>
 {
-    using var db = c.Env.D1("INTEGRATION_TEST_DB");
+    using var db = ctx.Env.D1("INTEGRATION_TEST_DB");
     using var select = db.Prepare("SELECT id, name, price, note FROM items WHERE id = ?1")
-        .Bind(JsArg.From(int.Parse(c.Parameters["id"])));
+        .Bind(JsArg.From(int.Parse(ctx.Parameters["id"])));
     string? json = await select.FirstJsonAsync();
     return json is null ? HttpResponse.NotFound() : HttpResponse.Json(json);
 });
 
-builder.MapGet("/d1/invalid", static async c =>
+builder.MapGet("/d1/invalid", static async ctx =>
 {
-    using var db = c.Env.D1("INTEGRATION_TEST_DB");
+    using var db = ctx.Env.D1("INTEGRATION_TEST_DB");
     using var bad = db.Prepare("SELECT * FROM no_such_table");
     try
     {
@@ -284,13 +284,13 @@ builder.MapGet("/d1/invalid", static async c =>
 
 // -- Service binding ---------------------------------------------------------------------
 
-builder.MapPost("/service/echo", static async c =>
+builder.MapPost("/service/echo", static async ctx =>
 {
-    using var upstream = c.Env.Service("INTEGRATION_TEST_UPSTREAM");
+    using var upstream = ctx.Env.Service("INTEGRATION_TEST_UPSTREAM");
     using var response = await upstream.FetchAsync(new FetchRequestMessage("http://upstream/echo")
     {
         Method = "POST",
-        Body = await c.Request.ReadAsStringAsync(),
+        Body = await ctx.Request.ReadAsStringAsync(),
     });
 
     return HttpResponse.Text(await response.ReadAsStringAsync(), response.StatusCode);
@@ -298,12 +298,12 @@ builder.MapPost("/service/echo", static async c =>
 
 // -- Fetch -------------------------------------------------------------------------------
 
-builder.MapPost("/fetch/echo", static async c =>
+builder.MapPost("/fetch/echo", static async ctx =>
 {
-    var request = new FetchRequestMessage(Upstream(c) + "/echo?from=fetch")
+    var request = new FetchRequestMessage(Upstream(ctx) + "/echo?from=fetch")
     {
         Method = "POST",
-        Body = await c.Request.ReadAsStringAsync(),
+        Body = await ctx.Request.ReadAsStringAsync(),
     };
     request.Headers.Add("x-integration-test", "fetch");
     request.Headers.Add("content-type", "text/plain");
@@ -312,20 +312,20 @@ builder.MapPost("/fetch/echo", static async c =>
     return HttpResponse.Text(await response.ReadAsStringAsync(), response.StatusCode);
 });
 
-builder.MapGet("/fetch/headers", static async c =>
+builder.MapGet("/fetch/headers", static async ctx =>
 {
-    using var response = await Fetch.FetchAsync(Upstream(c) + "/headers");
+    using var response = await Fetch.FetchAsync(Upstream(ctx) + "/headers");
     var headers = response.ReadHeaders();
     return HttpResponse.Json(
         new FetchHeadersInfo(response.StatusCode, headers.Get("x-upstream"), headers.Get("x-multi"), headers.Get("content-type")),
         IntegrationTestJsonContext.Default.FetchHeadersInfo);
 });
 
-builder.MapGet("/fetch/redirect/:mode", static async c =>
+builder.MapGet("/fetch/redirect/:mode", static async ctx =>
 {
-    var request = new FetchRequestMessage(Upstream(c) + "/redirect")
+    var request = new FetchRequestMessage(Upstream(ctx) + "/redirect")
     {
-        Redirect = c.Parameters["mode"] switch
+        Redirect = ctx.Parameters["mode"] switch
         {
             "manual" => FetchRedirectMode.Manual,
             "error" => FetchRedirectMode.Error,
@@ -344,15 +344,15 @@ builder.MapGet("/fetch/redirect/:mode", static async c =>
     }
 });
 
-builder.MapGet("/fetch/bytes", static async c =>
+builder.MapGet("/fetch/bytes", static async ctx =>
 {
-    using var response = await Fetch.FetchAsync(Upstream(c) + "/bytes");
+    using var response = await Fetch.FetchAsync(Upstream(ctx) + "/bytes");
     return HttpResponse.Binary(await response.ReadAsBytesAsync());
 });
 
-builder.MapGet("/fetch/json", static async c =>
+builder.MapGet("/fetch/json", static async ctx =>
 {
-    using var response = await Fetch.FetchAsync(Upstream(c) + "/json");
+    using var response = await Fetch.FetchAsync(Upstream(ctx) + "/json");
     var person = await response.ReadAsJsonAsync(IntegrationTestJsonContext.Default.Person);
     return HttpResponse.Json(person!, IntegrationTestJsonContext.Default.Person);
 });
@@ -373,10 +373,10 @@ builder.MapGet("/fetch/unreachable", static async _ =>
 // -- handle lifetime -----------------------------------------------------------------------
 
 // Creates and releases many JS handles in a single request to shake out leaks / double frees.
-builder.MapGet("/stress/handles/:n", static async c =>
+builder.MapGet("/stress/handles/:n", static async ctx =>
 {
-    int n = int.Parse(c.Parameters["n"]);
-    using var kv = c.Env.Kv("INTEGRATION_TEST_KV");
+    int n = int.Parse(ctx.Parameters["n"]);
+    using var kv = ctx.Env.Kv("INTEGRATION_TEST_KV");
     for (int i = 0; i < n; i++)
     {
         await kv.PutAsync("stress:" + (i % 10), "value-" + i);
@@ -407,12 +407,12 @@ static async Task PutAfterReleaseAsync(KvNamespace kv, string key, string upstre
 }
 
 
-static string Upstream(HttpContext c)
-    => c.Env.Var("UPSTREAM_URL") ?? throw new InvalidOperationException("UPSTREAM_URL is not configured.");
+static string Upstream(HttpContext ctx)
+    => ctx.Env.Var("UPSTREAM_URL") ?? throw new InvalidOperationException("UPSTREAM_URL is not configured.");
 
-static string? Query(HttpContext c, string name)
+static string? Query(HttpContext ctx, string name)
 {
-    string query = c.Request.Uri.Query;
+    string query = ctx.Request.Uri.Query;
     if (query.Length == 0)
     {
         return null;
