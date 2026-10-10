@@ -1,3 +1,4 @@
+using System.Net.Http.Headers;
 using System.Text.Json.Serialization;
 using Cloudflare.Workers.Hosting;
 using Cloudflare.Workers.Hosting.Interop;
@@ -370,6 +371,73 @@ builder.MapGet("/fetch/unreachable", static async _ =>
     }
 });
 
+// -- HttpClient / FetchHttpMessageHandler ----------------------------------------------------
+
+builder.MapPost("/http-client/echo", static async ctx =>
+{
+    using var client = CreateHttpClient(ctx);
+    using var request = new HttpRequestMessage(HttpMethod.Post, "echo?from=http-client")
+    {
+        Content = new ByteArrayContent(await ctx.Request.ReadAsBytesAsync()),
+    };
+    request.Headers.Add("x-integration-test", "http-client");
+    request.Headers.Add("x-multi", ["a", "b"]);
+    request.Content.Headers.ContentType = MediaTypeHeaderValue.Parse(
+        ctx.Request.Headers.Get("content-type") ?? "application/octet-stream");
+    request.Content.Headers.Add("x-content", ["one", "two"]);
+    // A stale length must not be forwarded: fetch computes the actual length from the body.
+    request.Content.Headers.ContentLength = 999;
+
+    using var response = await client.SendAsync(request);
+    return await ForwardHttpResponseAsync(response);
+});
+
+builder.MapGet("/http-client/empty/:method", static async ctx =>
+{
+    using var client = CreateHttpClient(ctx);
+    using var request = new HttpRequestMessage(new HttpMethod(ctx.Parameters["method"]), "echo")
+    {
+        Content = new ByteArrayContent([]),
+    };
+
+    using var response = await client.SendAsync(request);
+    return await DescribeHttpResponseAsync(response, request);
+});
+
+builder.MapGet("/http-client/response/:kind", static async ctx =>
+{
+    using var client = CreateHttpClient(ctx);
+    using var request = new HttpRequestMessage(HttpMethod.Get, ctx.Parameters["kind"]);
+    using var response = await client.SendAsync(request);
+    return Query(ctx, "metadata") == "true"
+        ? await DescribeHttpResponseAsync(response, request)
+        : await ForwardHttpResponseAsync(response);
+});
+
+builder.MapGet("/http-client/redirect/:mode", static async ctx =>
+{
+    using var client = CreateHttpClient(ctx, allowAutoRedirect: ctx.Parameters["mode"] != "manual");
+    using var response = await client.GetAsync("redirect");
+    return await ForwardHttpResponseAsync(response);
+});
+
+builder.MapGet("/http-client/unreachable", static async _ =>
+{
+    using var client = new HttpClient(new FetchHttpMessageHandler())
+    {
+        Timeout = Timeout.InfiniteTimeSpan,
+    };
+    try
+    {
+        using var response = await client.GetAsync("http://127.0.0.1:1/");
+        return HttpResponse.Text($"unexpected {response.StatusCode}", 500);
+    }
+    catch (JsException ex)
+    {
+        return HttpResponse.Text(ex.Message, 502);
+    }
+});
+
 // -- handle lifetime -----------------------------------------------------------------------
 
 // Creates and releases many JS handles in a single request to shake out leaks / double frees.
@@ -387,6 +455,43 @@ builder.MapGet("/stress/handles/:n", static async ctx =>
 });
 
 builder.Build().Run();
+
+static HttpClient CreateHttpClient(HttpContext ctx, bool allowAutoRedirect = true)
+    => new(new FetchHttpMessageHandler { AllowAutoRedirect = allowAutoRedirect })
+    {
+        BaseAddress = new Uri(Upstream(ctx) + "/"),
+        // HttpClient's timeout uses WASI timers that the shim does not implement.
+        // The test fixture's client still bounds every request with a timeout.
+        Timeout = Timeout.InfiniteTimeSpan,
+    };
+
+static async Task<HttpResponse> ForwardHttpResponseAsync(HttpResponseMessage response)
+{
+    var result = (int)response.StatusCode == 204
+        ? HttpResponse.NoContent()
+        : HttpResponse.Binary(await response.Content.ReadAsByteArrayAsync(), (int)response.StatusCode,
+            response.Content.Headers.ContentType?.ToString() ?? "application/octet-stream");
+    foreach (var header in response.Headers)
+    {
+        result.Headers.Add(header.Key, string.Join(", ", header.Value));
+    }
+    return result;
+}
+
+static async Task<HttpResponse> DescribeHttpResponseAsync(HttpResponseMessage response, HttpRequestMessage request)
+{
+    var body = await response.Content.ReadAsByteArrayAsync();
+    return HttpResponse.Json(new HttpClientResponseInfo(
+        (int)response.StatusCode,
+        Convert.ToBase64String(body),
+        response.Headers.TryGetValues("x-upstream", out var upstream) ? string.Join(", ", upstream) : null,
+        response.Headers.TryGetValues("x-multi", out var multi) ? string.Join(", ", multi) : null,
+        response.Content.Headers.ContentType?.ToString(),
+        response.Content.Headers.ContentLength,
+        response.Content.Headers.ContentEncoding.ToArray(),
+        response.RequestMessage?.RequestUri?.AbsoluteUri,
+        ReferenceEquals(request, response.RequestMessage)), IntegrationTestJsonContext.Default.HttpClientResponseInfo);
+}
 
 static async Task PutAfterReleaseAsync(KvNamespace kv, string key, string upstreamUrl)
 {
@@ -478,6 +583,17 @@ public sealed record FetchHeadersInfo(
     [property: JsonPropertyName("multi")] string? Multi,
     [property: JsonPropertyName("contentType")] string? ContentType);
 
+public sealed record HttpClientResponseInfo(
+    [property: JsonPropertyName("status")] int Status,
+    [property: JsonPropertyName("bodyBase64")] string BodyBase64,
+    [property: JsonPropertyName("upstream")] string? Upstream,
+    [property: JsonPropertyName("multi")] string? Multi,
+    [property: JsonPropertyName("contentType")] string? ContentType,
+    [property: JsonPropertyName("contentLength")] long? ContentLength,
+    [property: JsonPropertyName("contentEncoding")] string[] ContentEncoding,
+    [property: JsonPropertyName("requestUrl")] string? RequestUrl,
+    [property: JsonPropertyName("sameRequest")] bool SameRequest);
+
 [JsonSerializable(typeof(Person))]
 [JsonSerializable(typeof(HeaderPair[]))]
 [JsonSerializable(typeof(EnvInfo))]
@@ -487,4 +603,5 @@ public sealed record FetchHeadersInfo(
 [JsonSerializable(typeof(ItemRow[]))]
 [JsonSerializable(typeof(D1RunInfo))]
 [JsonSerializable(typeof(FetchHeadersInfo))]
+[JsonSerializable(typeof(HttpClientResponseInfo))]
 public sealed partial class IntegrationTestJsonContext : JsonSerializerContext;
