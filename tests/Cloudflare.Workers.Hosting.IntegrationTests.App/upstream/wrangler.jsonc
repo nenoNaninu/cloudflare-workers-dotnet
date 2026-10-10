@@ -1,0 +1,6 @@
+{
+    // Tiny plain-JS Worker reached through the INTEGRATION_TEST_UPSTREAM service binding.
+    "name": "integration-test-upstream",
+    "main": "index.js",
+    "compatibility_date": "2026-07-01"
+}

@@ -1,0 +1,72 @@
+name: integration-tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_VERSION: 10.0.x
+  NODE_VERSION: 22.x
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_NOLOGO: true
+  WASI_SDK_RELEASE: "29"
+  WASI_SDK_VERSION: "29.0"
+
+jobs:
+  # Builds the C# worker to wasm and drives it through `wrangler dev` (workerd) - the only way to
+  # verify the JS shim / IJsInterop against a real Workers runtime.
+  integration-tests:
+    name: Integration tests (wrangler dev)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: tests/Cloudflare.Workers.Hosting.IntegrationTests.App/package-lock.json
+
+      - name: Install WASI SDK
+        shell: bash
+        run: |
+          archive="$RUNNER_TEMP/wasi-sdk.tar.gz"
+          sdk="$RUNNER_TEMP/wasi-sdk-${WASI_SDK_VERSION}-x86_64-linux"
+          curl --fail --location --retry 3 \
+            --output "$archive" \
+            "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_SDK_RELEASE}/wasi-sdk-${WASI_SDK_VERSION}-x86_64-linux.tar.gz"
+          tar --extract --gzip --file "$archive" --directory "$RUNNER_TEMP"
+          test -d "$sdk/share/wasi-sysroot"
+          echo "WASI_SDK_PATH=$sdk" >> "$GITHUB_ENV"
+
+      - name: Publish the test worker
+        run: dotnet publish tests/Cloudflare.Workers.Hosting.IntegrationTests.App --configuration Release
+
+      - name: Install wrangler
+        run: npm ci
+        working-directory: tests/Cloudflare.Workers.Hosting.IntegrationTests.App
+
+      - name: Run integration tests
+        run: dotnet test tests/Cloudflare.Workers.Hosting.IntegrationTests/Cloudflare.Workers.Hosting.IntegrationTests.csproj --configuration Release
+
+      - name: Upload wrangler log
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: wrangler-integration-log
+          path: tests/Cloudflare.Workers.Hosting.IntegrationTests/bin/Release/net10.0/wrangler-integration-test.log
+          if-no-files-found: ignore
