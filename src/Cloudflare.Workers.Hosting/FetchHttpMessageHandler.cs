@@ -5,7 +5,7 @@ namespace Cloudflare.Workers.Hosting;
 
 public sealed class FetchHttpMessageHandler : HttpMessageHandler
 {
-    private readonly JsRuntime? _runtime;
+    private readonly JsRuntime _runtime;
 
     public FetchHttpMessageHandler() : this(JsRuntime.Current)
     {
@@ -65,7 +65,7 @@ public sealed class FetchHttpMessageHandler : HttpMessageHandler
             }
         }
 
-        using var fetchResponse = await Fetch.FetchAsync(_runtime ?? JsRuntime.Current, fetchRequest).ConfigureAwait(false);
+        using var fetchResponse = await Fetch.FetchAsync(_runtime, fetchRequest).ConfigureAwait(false);
 
         var responseBody = await fetchResponse.ReadAsBytesAsync().ConfigureAwait(false);
         var responseHeaders = fetchResponse.ReadHeaders();
