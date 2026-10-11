@@ -7,7 +7,7 @@ public sealed class FetchHttpMessageHandler : HttpMessageHandler
 {
     private readonly JsRuntime? _runtime;
 
-    public FetchHttpMessageHandler()
+    public FetchHttpMessageHandler() : this(JsRuntime.Current)
     {
     }
 
