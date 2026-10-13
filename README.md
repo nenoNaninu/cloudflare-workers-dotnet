@@ -38,6 +38,7 @@ builder.Build().Run();
   - [Write C# Code](#write-c-code)
   - [Development \& Deployment](#development--deployment)
   - [Fetch](#fetch)
+  - [HttpClient](#httpclient)
   - [KV](#kv)
   - [R2](#r2)
   - [D1](#d1)
@@ -259,6 +260,65 @@ builder.MapPost("/fetch", static async _ =>
 });
 ```
 
+### HttpClient
+
+`HttpClient` is supported through `FetchHttpMessageHandler`.
+
+Setting `Timeout = Timeout.InfiniteTimeSpan` is required when creating an `HttpClient`. Its built-in timeout uses .NET timers that are not supported by the current Workers host. Without this setting, sending a request can fail with `Unimplemented wasm import wasi:clocks/monotonic-clock@0.2.0.subscribe-duration`. 
+
+```cs
+using System.Net.Http;
+using System.Net.Http.Json;
+using System.Text.Json.Serialization;
+using Cloudflare.Workers.Hosting;
+
+var builder = WorkerApplication.CreateBuilder();
+
+builder.MapGet("/http-client", static async _ =>
+{
+    var client = new HttpClient(new FetchHttpMessageHandler())
+    {
+        Timeout = Timeout.InfiniteTimeSpan
+    };
+
+    using var response = await client.GetAsync("https://example.com/");
+
+    string body = await response.Content.ReadAsStringAsync();
+
+    return HttpResponse.Text(body, (int)response.StatusCode);
+});
+
+builder.MapPost("/http-client", static async _ =>
+{
+    var client = new HttpClient(new FetchHttpMessageHandler())
+    {
+        Timeout = Timeout.InfiniteTimeSpan
+    };
+
+    using var request = new HttpRequestMessage(HttpMethod.Post, "https://example.com")
+    {
+        Content = JsonContent.Create(new MyMessageRequest("Hello from C#!"), WorkerJsonContext.Default.MyMessageRequest)
+    };
+
+    using var response = await client.SendAsync(request);
+
+    string body = await response.Content.ReadAsStringAsync();
+
+    return HttpResponse.Json(body, (int)response.StatusCode);
+});
+
+builder.Build().Run();
+
+public sealed record MyMessageRequest(string Message);
+
+[JsonSerializable(typeof(MyMessageRequest))]
+public partial class WorkerJsonContext : JsonSerializerContext;
+```
+
+You can set `BaseAddress` on the client to use relative request URLs. Redirects are followed by default; set `AllowAutoRedirect = false` on `FetchHttpMessageHandler` to handle redirect responses yourself.
+
+Request and response bodies are buffered in memory. Cancellation tokens do not abort an in-flight `fetch` request.
+
 ### KV
 
 In `wrangler.jsonc`, configure a KV namespace binding with a name of your choice. This example uses `MY_KV`; replace it with the name of your binding.
@@ -400,7 +460,7 @@ Running WASM on Cloudflare Workers comes with several limitations:
   - For example, `Task.Run` is not available.
 - Standard I/O APIs are not available.
   - Use the APIs provided by `Cloudflare.Workers.Hosting`.
-  - For example, use `Fetch.FetchAsync` instead of `HttpClient`. Support for `HttpClient` is planned.
+  - For outbound HTTP requests, use `Fetch.FetchAsync` or [`HttpClient` with `FetchHttpMessageHandler`](#httpclient).
 - Use `WorkerTimer.Delay` when your code needs to wait for a specified duration.
   - `Task.Delay` and `Thread.Sleep` are not available.
 

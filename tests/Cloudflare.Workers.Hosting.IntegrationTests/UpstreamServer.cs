@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.IO.Compression;
 using System.Text;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -13,6 +14,8 @@ namespace Cloudflare.Workers.Hosting.IntegrationTests;
 /// </summary>
 public sealed class UpstreamServer : IAsyncDisposable
 {
+    public const string CompressedResponseBody = "compressed response こんにちは 🌏";
+
     private readonly WebApplication _app;
     private readonly ConcurrentDictionary<string, WaitUntilGate> _waitUntilGates;
 
@@ -88,6 +91,24 @@ public sealed class UpstreamServer : IAsyncDisposable
         app.MapGet("/bytes", () => Results.Bytes(Enumerable.Range(0, 256).Select(i => (byte)i).ToArray(), "application/octet-stream"));
 
         app.MapGet("/json", () => Results.Text("""{"name":"Ada","age":36}""", "application/json"));
+
+        app.MapGet("/not-found", () => Results.Text("missing upstream resource", "text/plain", statusCode: 404));
+
+        app.MapGet("/no-content", () => Results.NoContent());
+
+        app.MapGet("/gzip", async (HttpContext context) =>
+        {
+            using var buffer = new MemoryStream();
+            using (var gzip = new GZipStream(buffer, CompressionLevel.SmallestSize, leaveOpen: true))
+            {
+                await gzip.WriteAsync(Encoding.UTF8.GetBytes(CompressedResponseBody), context.RequestAborted);
+            }
+            var compressedBody = buffer.ToArray();
+            context.Response.ContentType = "text/plain; charset=utf-8";
+            context.Response.Headers.ContentEncoding = "gzip";
+            context.Response.ContentLength = compressedBody.Length;
+            await context.Response.Body.WriteAsync(compressedBody, context.RequestAborted);
+        });
 
         await app.StartAsync();
         string address = app.Urls.First();
