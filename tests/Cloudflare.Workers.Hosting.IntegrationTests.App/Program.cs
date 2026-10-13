@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using Cloudflare.Workers.Hosting;
 using Cloudflare.Workers.Hosting.Interop;
@@ -387,6 +388,19 @@ builder.MapPost("/http-client/echo", static async ctx =>
     request.Content.Headers.Add("x-content", ["one", "two"]);
     // A stale length must not be forwarded: fetch computes the actual length from the body.
     request.Content.Headers.ContentLength = 999;
+
+    using var response = await client.SendAsync(request);
+    return await ForwardHttpResponseAsync(response);
+});
+
+builder.MapPost("/http-client/json", static async ctx =>
+{
+    using var client = CreateHttpClient(ctx);
+    var person = new Person(await ctx.Request.ReadAsStringAsync(), 36);
+    using var request = new HttpRequestMessage(HttpMethod.Post, "echo?from=http-client-json")
+    {
+        Content = JsonContent.Create(person, IntegrationTestJsonContext.Default.Person),
+    };
 
     using var response = await client.SendAsync(request);
     return await ForwardHttpResponseAsync(response);

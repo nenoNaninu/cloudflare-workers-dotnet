@@ -40,6 +40,22 @@ public class FetchHttpMessageHandlerTests(WorkerFixture worker) : IntegrationTes
         Assert.Equal("256", json.GetProperty("headers").GetProperty("content-length").GetString());
     }
 
+    [Fact]
+    public async Task HttpClient_PostsJsonContentWithSourceGeneratedTypeInfoAndDefaultContentType()
+    {
+        const string name = "JsonContent こんにちは 🌏 café \"quoted\"\nnext line";
+        var json = await SendJsonAsync(HttpMethod.Post, "http-client/json", Text(name));
+
+        Assert.Equal("POST", json.GetProperty("method").GetString());
+        Assert.Equal("/echo", json.GetProperty("path").GetString());
+        Assert.Equal("?from=http-client-json", json.GetProperty("query").GetString());
+        Assert.Equal("application/json; charset=utf-8", json.GetProperty("headers").GetProperty("content-type").GetString());
+
+        using var body = JsonDocument.Parse(json.GetProperty("body").GetString()!);
+        Assert.Equal(name, body.RootElement.GetProperty("name").GetString());
+        Assert.Equal(36, body.RootElement.GetProperty("age").GetInt32());
+    }
+
     [Theory]
     [InlineData("GET")]
     [InlineData("HEAD")]
