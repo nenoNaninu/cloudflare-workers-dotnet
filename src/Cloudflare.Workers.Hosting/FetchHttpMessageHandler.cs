@@ -39,7 +39,7 @@ public sealed class FetchHttpMessageHandler : HttpMessageHandler
         {
             Method = request.Method.Method,
             // fetch() rejects a body on GET/HEAD.
-            BytesBody = body is { Length: > 0 } ? body : null,
+            BytesBody = body?.Length > 0 ? body : null,
             Redirect = AllowAutoRedirect ? FetchRedirectMode.Follow : FetchRedirectMode.Manual,
         };
 
