@@ -24,21 +24,18 @@ public sealed class FetchHttpMessageHandler : HttpMessageHandler
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        if (request.RequestUri is not { IsAbsoluteUri: true } uri)
+        if (request.RequestUri is null || !request.RequestUri.IsAbsoluteUri)
         {
             throw new InvalidOperationException("The request URI must be an absolute URI.");
         }
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        byte[]? body = null;
+        byte[]? body = request.Content is not null
+            ? await request.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false)
+            : null;
 
-        if (request.Content is not null)
-        {
-            body = await request.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
-        }
-
-        var fetchRequest = new FetchRequestMessage(uri.AbsoluteUri)
+        var fetchRequest = new FetchRequestMessage(request.RequestUri.AbsoluteUri)
         {
             Method = request.Method.Method,
             // fetch() rejects a body on GET/HEAD.
