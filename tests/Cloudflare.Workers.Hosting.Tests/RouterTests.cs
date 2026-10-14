@@ -1,4 +1,5 @@
 ﻿using Cloudflare.Workers.Hosting.Tests.Fakes;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Cloudflare.Workers.Hosting.Tests;
@@ -92,13 +93,15 @@ public class RouterTests
         Assert.Equal("fallback:/nope", await HandleAndReadBody(router, "GET", "https://x.dev/nope"));
     }
 
+    private static readonly IServiceProvider EmptyServices = new ServiceCollection().BuildServiceProvider();
+
     private static async Task<HttpResponse> Handle(HttpRequestRouter router, string method, string url)
     {
         var (interop, runtime) = FakeWorld.Create();
         using var request = HttpRequest.FromJsObject(runtime.WrapToJsObject(interop.Retain(FakeWorld.CreateRequest(method, url))));
         using var env = FakeWorld.CreateEnv(runtime, interop);
         using var context = FakeWorld.CreateContext(runtime, interop);
-        return await router.HandleAsync(request, env, context);
+        return await router.HandleAsync(request, env, context, EmptyServices);
     }
 
     private static async Task<string> HandleAndReadBody(HttpRequestRouter router, string method, string url)
@@ -107,7 +110,7 @@ public class RouterTests
         using var request = HttpRequest.FromJsObject(runtime.WrapToJsObject(interop.Retain(FakeWorld.CreateRequest(method, url))));
         using var env = FakeWorld.CreateEnv(runtime, interop);
         using var context = FakeWorld.CreateContext(runtime, interop);
-        var response = await router.HandleAsync(request, env, context);
+        var response = await router.HandleAsync(request, env, context, EmptyServices);
 
         using var js = response.ToJsObject(runtime);
         var fake = Assert.IsType<FakeObject>(interop.Get(js.Handle));
