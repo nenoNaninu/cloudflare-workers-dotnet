@@ -1,16 +1,24 @@
-﻿namespace Cloudflare.Workers.Hosting;
+﻿using Microsoft.Extensions.DependencyInjection;
+
+namespace Cloudflare.Workers.Hosting;
 
 
 public sealed class WorkerApplication : IWorkerFetchHandler, IWorkerScheduledHandler
 {
     private readonly HttpRequestRouter _router;
-    private readonly Func<ScheduledEvent, Env, WorkerContext, Task>? _scheduled;
+    private readonly Func<ScheduledEvent, Env, WorkerContext, IServiceProvider, Task>? _scheduled;
 
-    internal WorkerApplication(HttpRequestRouter router, Func<ScheduledEvent, Env, WorkerContext, Task>? scheduled)
+    internal WorkerApplication(
+        IServiceProvider services,
+        HttpRequestRouter router,
+        Func<ScheduledEvent, Env, WorkerContext, IServiceProvider, Task>? scheduled)
     {
+        Services = services;
         _router = router;
         _scheduled = scheduled;
     }
+
+    public IServiceProvider Services { get; }
 
     public static WorkerApplicationBuilder CreateBuilder() => new();
 
@@ -33,21 +41,49 @@ public sealed class WorkerApplication : IWorkerFetchHandler, IWorkerScheduledHan
         }
     }
 
-    public Task<HttpResponse> FetchAsync(HttpRequest request, Env env, WorkerContext context)
-        => _router.HandleAsync(request, env, context);
+    public async Task<HttpResponse> FetchAsync(HttpRequest request, Env env, WorkerContext context)
+    {
+        await using var scope = CreateEventScope(env, context);
+        return await _router.HandleAsync(request, env, context, scope.ServiceProvider).ConfigureAwait(false);
+    }
 
-    public Task ScheduledAsync(ScheduledEvent scheduledEvent, Env env, WorkerContext context)
-        => _scheduled is null ? Task.CompletedTask : _scheduled(scheduledEvent, env, context);
+    public async Task ScheduledAsync(ScheduledEvent scheduledEvent, Env env, WorkerContext context)
+    {
+        if (_scheduled is null)
+        {
+            return;
+        }
+
+        await using var scope = CreateEventScope(env, context);
+        await _scheduled(scheduledEvent, env, context, scope.ServiceProvider).ConfigureAwait(false);
+    }
+
+    private AsyncServiceScope CreateEventScope(Env env, WorkerContext context)
+    {
+        var scope = Services.CreateAsyncScope();
+        scope.ServiceProvider.GetRequiredService<WorkerEventScope>().Initialize(env, context);
+        return scope;
+    }
 }
 
 public sealed class WorkerApplicationBuilder
 {
     private readonly HttpRequestRouter _router = new();
-    private Func<ScheduledEvent, Env, WorkerContext, Task>? _scheduled;
+    private Func<ScheduledEvent, Env, WorkerContext, IServiceProvider, Task>? _scheduled;
 
     internal WorkerApplicationBuilder()
     {
+        Services.AddScoped(static _ => new WorkerEventScope());
+        Services.AddScoped(static sp => sp.GetRequiredService<WorkerEventScope>().Env);
+        Services.AddScoped(static sp => sp.GetRequiredService<WorkerEventScope>().WorkerContext);
     }
+
+    /// <summary>
+    /// The services available to the application.
+    /// A new service scope is created for each fetch / scheduled event,
+    /// and <see cref="Env"/> and <see cref="WorkerContext"/> of that event are registered as scoped services.
+    /// </summary>
+    public IServiceCollection Services { get; } = new ServiceCollection();
 
     public WorkerApplicationBuilder MapGet(string pattern, HttpRequestHandler handler)
     {
@@ -105,9 +141,25 @@ public sealed class WorkerApplicationBuilder
 
     public WorkerApplicationBuilder OnScheduled(Func<ScheduledEvent, Env, WorkerContext, Task> handler)
     {
+        ArgumentNullException.ThrowIfNull(handler);
+        _scheduled = (scheduledEvent, env, context, _) => handler(scheduledEvent, env, context);
+        return this;
+    }
+
+    /// <summary>
+    /// Registers the scheduled handler. The last argument is the service provider of the event's scope.
+    /// </summary>
+    public WorkerApplicationBuilder OnScheduled(Func<ScheduledEvent, Env, WorkerContext, IServiceProvider, Task> handler)
+    {
         _scheduled = handler;
         return this;
     }
 
-    public WorkerApplication Build() => new(_router, _scheduled);
+    public WorkerApplication Build()
+    {
+        // ValidateScopes rejects capturing per-event services (Env, WorkerContext, ...) in singletons,
+        // whose JS handles would be released once the event completes.
+        var services = Services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        return new(services, _router, _scheduled);
+    }
 }
