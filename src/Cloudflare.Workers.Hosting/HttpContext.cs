@@ -24,8 +24,5 @@ public sealed class HttpContext
 
     public IReadOnlyDictionary<string, string> Parameters { get; }
 
-    /// <summary>
-    /// The service provider of this request's scope. Scoped services are disposed after the response is produced.
-    /// </summary>
     public IServiceProvider RequestServices { get; }
 }

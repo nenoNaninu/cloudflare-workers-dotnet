@@ -61,7 +61,7 @@ public sealed class WorkerApplication : IWorkerFetchHandler, IWorkerScheduledHan
     private AsyncServiceScope CreateEventScope(Env env, WorkerContext context)
     {
         var scope = Services.CreateAsyncScope();
-        scope.ServiceProvider.GetRequiredService<WorkerEventScope>().Initialize(env, context);
+        scope.ServiceProvider.GetRequiredService<WorkerEventScopeHolder>().Set(env, context);
         return scope;
     }
 }
@@ -73,16 +73,11 @@ public sealed class WorkerApplicationBuilder
 
     internal WorkerApplicationBuilder()
     {
-        Services.AddScoped(static _ => new WorkerEventScope());
-        Services.AddScoped(static sp => sp.GetRequiredService<WorkerEventScope>().Env);
-        Services.AddScoped(static sp => sp.GetRequiredService<WorkerEventScope>().WorkerContext);
+        Services.AddScoped(static _ => new WorkerEventScopeHolder());
+        Services.AddScoped(static sp => sp.GetRequiredService<WorkerEventScopeHolder>().Env);
+        Services.AddScoped(static sp => sp.GetRequiredService<WorkerEventScopeHolder>().WorkerContext);
     }
 
-    /// <summary>
-    /// The services available to the application.
-    /// A new service scope is created for each fetch / scheduled event,
-    /// and <see cref="Env"/> and <see cref="WorkerContext"/> of that event are registered as scoped services.
-    /// </summary>
     public IServiceCollection Services { get; } = new ServiceCollection();
 
     public WorkerApplicationBuilder MapGet(string pattern, HttpRequestHandler handler)
@@ -157,8 +152,6 @@ public sealed class WorkerApplicationBuilder
 
     public WorkerApplication Build()
     {
-        // ValidateScopes rejects capturing per-event services (Env, WorkerContext, ...) in singletons,
-        // whose JS handles would be released once the event completes.
         var services = Services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         return new(services, _router, _scheduled);
     }
