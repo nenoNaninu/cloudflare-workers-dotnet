@@ -471,8 +471,22 @@ builder.MapGet("/stress/handles/:n", static async ctx =>
 
 // -- dependency injection --------------------------------------------------------------------
 
-builder.Services.AddSingleton<RequestCounter>();
+builder.Services.AddSingleton<WorkerCache>();
 builder.Services.AddScoped<ScopedKvStore>();
+
+builder.MapGet("/di/cache/:key", static ctx =>
+{
+    var cache = ctx.RequestServices.GetRequiredService<WorkerCache>();
+    string key = ctx.Parameters["key"];
+    string value = cache.GetOrAdd(key, static () => "hello from cache");
+
+    var sharedCache = ctx.RequestServices.GetRequiredService<WorkerCache>();
+    string cachedValue = sharedCache.GetOrAdd(key, static () => "cache miss");
+
+    return Task.FromResult(HttpResponse.Json(
+        new CacheInfo(value, cachedValue, ReferenceEquals(cache, sharedCache)),
+        IntegrationTestJsonContext.Default.CacheInfo));
+});
 
 builder.MapPut("/di/kv/:key", static async ctx =>
 {
@@ -482,7 +496,6 @@ builder.MapPut("/di/kv/:key", static async ctx =>
 
     return HttpResponse.Json(
         new DiInfo(
-            services.GetRequiredService<RequestCounter>().Next(),
             ReferenceEquals(store, services.GetRequiredService<ScopedKvStore>()),
             store.Var),
         IntegrationTestJsonContext.Default.DiInfo);
@@ -576,11 +589,21 @@ static string? Query(HttpContext ctx, string name)
     return null;
 }
 
-public sealed class RequestCounter
+/// <summary>Best-effort cache local to this Worker instance.</summary>
+public sealed class WorkerCache
 {
-    private int _count;
+    private readonly Dictionary<string, string> _values = new();
 
-    public int Next() => ++_count;
+    public string GetOrAdd(string key, Func<string> factory)
+    {
+        if (!_values.TryGetValue(key, out var value))
+        {
+            value = factory();
+            _values[key] = value;
+        }
+
+        return value;
+    }
 }
 
 /// <summary>Scoped service that receives the current event's <see cref="Env"/> through constructor injection.</summary>
@@ -597,8 +620,12 @@ public sealed class ScopedKvStore(Env env) : IDisposable
     public void Dispose() => _kv.Dispose();
 }
 
+public sealed record CacheInfo(
+    [property: JsonPropertyName("value")] string Value,
+    [property: JsonPropertyName("cachedValue")] string CachedValue,
+    [property: JsonPropertyName("sameSingletonInstance")] bool SameSingletonInstance);
+
 public sealed record DiInfo(
-    [property: JsonPropertyName("count")] int Count,
     [property: JsonPropertyName("sameScopedInstance")] bool SameScopedInstance,
     [property: JsonPropertyName("var")] string? Var);
 
@@ -671,4 +698,5 @@ public sealed record HttpClientResponseInfo(
 [JsonSerializable(typeof(FetchHeadersInfo))]
 [JsonSerializable(typeof(HttpClientResponseInfo))]
 [JsonSerializable(typeof(DiInfo))]
+[JsonSerializable(typeof(CacheInfo))]
 public sealed partial class IntegrationTestJsonContext : JsonSerializerContext;

@@ -18,12 +18,13 @@ public class DependencyInjectionTests(WorkerFixture worker) : IntegrationTestBas
     }
 
     [Fact]
-    public async Task Singleton_IsSharedAcrossRequests()
+    public async Task SingletonCache_IsReusedWithinRequest()
     {
-        var first = await SendJsonAsync(HttpMethod.Put, $"di/kv/{UniqueKey("di")}", Text("a"));
-        var second = await SendJsonAsync(HttpMethod.Put, $"di/kv/{UniqueKey("di")}", Text("b"));
+        var info = await GetJsonAsync($"di/cache/{UniqueKey("di")}");
 
-        Assert.True(second.GetProperty("count").GetInt32() > first.GetProperty("count").GetInt32());
+        Assert.True(info.GetProperty("sameSingletonInstance").GetBoolean());
+        Assert.Equal("hello from cache", info.GetProperty("value").GetString());
+        Assert.Equal(info.GetProperty("value").GetString(), info.GetProperty("cachedValue").GetString());
     }
 
     [Fact]

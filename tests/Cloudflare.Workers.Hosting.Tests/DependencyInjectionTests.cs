@@ -6,9 +6,20 @@ namespace Cloudflare.Workers.Hosting.Tests;
 
 public class DependencyInjectionTests
 {
-    private sealed class Counter
+    private sealed class WorkerCache
     {
-        public int Value { get; set; }
+        private readonly Dictionary<string, string> _values = new();
+
+        public string GetOrAdd(string key, Func<string> factory)
+        {
+            if (!_values.TryGetValue(key, out var value))
+            {
+                value = factory();
+                _values[key] = value;
+            }
+
+            return value;
+        }
     }
 
     private sealed class ScopedTracker : IDisposable
@@ -42,21 +53,38 @@ public class DependencyInjectionTests
     }
 
     [Fact]
-    public async Task Singleton_IsSharedAcrossRequests()
+    public async Task SingletonCache_IsReusedWithinSameApplication()
     {
         var builder = WorkerApplication.CreateBuilder();
-        builder.Services.AddSingleton<Counter>();
+        builder.Services.AddSingleton<WorkerCache>();
         builder.MapGet("/", static context =>
         {
-            var counter = context.RequestServices.GetRequiredService<Counter>();
-            counter.Value++;
-            return Task.FromResult(HttpResponse.Text(counter.Value.ToString()));
+            var cache = context.RequestServices.GetRequiredService<WorkerCache>();
+            return Task.FromResult(HttpResponse.Text(cache.GetOrAdd("greeting", static () => Guid.NewGuid().ToString())));
         });
         var app = builder.Build();
 
-        Assert.Equal("1", await FetchBody(app, "https://x.dev/"));
-        Assert.Equal("2", await FetchBody(app, "https://x.dev/"));
-        Assert.Same(app.Services.GetRequiredService<Counter>(), app.Services.GetRequiredService<Counter>());
+        string cachedValue = await FetchBody(app, "https://x.dev/");
+        Assert.True(Guid.TryParse(cachedValue, out _));
+        Assert.Equal(cachedValue, await FetchBody(app, "https://x.dev/"));
+        Assert.Equal(cachedValue, app.Services.GetRequiredService<WorkerCache>().GetOrAdd("greeting", static () => "cache miss"));
+    }
+
+    [Fact]
+    public void SingletonCache_IsNotSharedAcrossApplications()
+    {
+        static WorkerApplication CreateApplication()
+        {
+            var builder = WorkerApplication.CreateBuilder();
+            builder.Services.AddSingleton<WorkerCache>();
+            return builder.Build();
+        }
+
+        var first = CreateApplication().Services.GetRequiredService<WorkerCache>();
+        var second = CreateApplication().Services.GetRequiredService<WorkerCache>();
+
+        Assert.Equal("first", first.GetOrAdd("greeting", static () => "first"));
+        Assert.Equal("second", second.GetOrAdd("greeting", static () => "second"));
     }
 
     [Fact]
@@ -113,12 +141,14 @@ public class DependencyInjectionTests
     public async Task Fallback_ReceivesRequestServices()
     {
         var builder = WorkerApplication.CreateBuilder();
-        builder.Services.AddSingleton(new Counter { Value = 42 });
+        var cache = new WorkerCache();
+        cache.GetOrAdd("fallback", static () => "cached fallback");
+        builder.Services.AddSingleton(cache);
         builder.MapFallback(static context =>
-            Task.FromResult(HttpResponse.Text(context.RequestServices.GetRequiredService<Counter>().Value.ToString(), 404)));
+            Task.FromResult(HttpResponse.Text(context.RequestServices.GetRequiredService<WorkerCache>().GetOrAdd("fallback", static () => "cache miss"), 404)));
         var app = builder.Build();
 
-        Assert.Equal("42", await FetchBody(app, "https://x.dev/missing"));
+        Assert.Equal("cached fallback", await FetchBody(app, "https://x.dev/missing"));
     }
 
     [Fact]
