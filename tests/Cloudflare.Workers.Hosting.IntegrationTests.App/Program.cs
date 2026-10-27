@@ -117,10 +117,10 @@ builder.MapGet("/wait-until/:key", static ctx =>
     return Task.FromResult(HttpResponse.Text("accepted", 202));
 });
 
-builder.OnScheduled(static async (evt, env, _) =>
+builder.OnScheduled(static async context =>
 {
-    using var kv = env.Kv("INTEGRATION_TEST_KV");
-    await kv.PutAsync("scheduled:last", $"{evt.Cron}|{evt.ScheduledTime.ToUnixTimeMilliseconds() > 0}");
+    using var kv = context.Env.Kv("INTEGRATION_TEST_KV");
+    await kv.PutAsync("scheduled:last", $"{context.ScheduledEvent.Cron}|{context.ScheduledEvent.ScheduledTime.ToUnixTimeMilliseconds() > 0}");
 });
 
 // -- KV ----------------------------------------------------------------------------------

@@ -6,12 +6,12 @@ namespace Cloudflare.Workers.Hosting;
 public sealed class WorkerApplication : IWorkerFetchHandler, IWorkerScheduledHandler
 {
     private readonly HttpRequestRouter _router;
-    private readonly Func<ScheduledEvent, Env, WorkerContext, IServiceProvider, Task>? _scheduled;
+    private readonly ScheduledEventHandler? _scheduled;
 
     internal WorkerApplication(
         IServiceProvider services,
         HttpRequestRouter router,
-        Func<ScheduledEvent, Env, WorkerContext, IServiceProvider, Task>? scheduled)
+        ScheduledEventHandler? scheduled)
     {
         Services = services;
         _router = router;
@@ -55,7 +55,7 @@ public sealed class WorkerApplication : IWorkerFetchHandler, IWorkerScheduledHan
         }
 
         await using var scope = CreateEventScope(env, context);
-        await _scheduled(scheduledEvent, env, context, scope.ServiceProvider).ConfigureAwait(false);
+        await _scheduled(new ScheduledEventContext(scheduledEvent, env, context, scope.ServiceProvider)).ConfigureAwait(false);
     }
 
     private AsyncServiceScope CreateEventScope(Env env, WorkerContext context)
@@ -69,7 +69,7 @@ public sealed class WorkerApplication : IWorkerFetchHandler, IWorkerScheduledHan
 public sealed class WorkerApplicationBuilder
 {
     private readonly HttpRequestRouter _router = new();
-    private Func<ScheduledEvent, Env, WorkerContext, IServiceProvider, Task>? _scheduled;
+    private ScheduledEventHandler? _scheduled;
 
     internal WorkerApplicationBuilder()
     {
@@ -134,18 +134,9 @@ public sealed class WorkerApplicationBuilder
         return this;
     }
 
-    public WorkerApplicationBuilder OnScheduled(Func<ScheduledEvent, Env, WorkerContext, Task> handler)
+    public WorkerApplicationBuilder OnScheduled(ScheduledEventHandler handler)
     {
         ArgumentNullException.ThrowIfNull(handler);
-        _scheduled = (scheduledEvent, env, context, _) => handler(scheduledEvent, env, context);
-        return this;
-    }
-
-    /// <summary>
-    /// Registers the scheduled handler. The last argument is the service provider of the event's scope.
-    /// </summary>
-    public WorkerApplicationBuilder OnScheduled(Func<ScheduledEvent, Env, WorkerContext, IServiceProvider, Task> handler)
-    {
         _scheduled = handler;
         return this;
     }

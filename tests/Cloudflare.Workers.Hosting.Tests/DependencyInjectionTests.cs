@@ -170,14 +170,49 @@ public class DependencyInjectionTests
     }
 
     [Fact]
+    public async Task OnScheduled_ScopeLivesUntilAsyncHandlerCompletesAndIsCreatedPerEvent()
+    {
+        var trackers = new List<ScopedTracker>();
+        int disposedBefore = Volatile.Read(ref ScopedTracker.DisposedCount);
+        var builder = WorkerApplication.CreateBuilder();
+        builder.Services.AddScoped<ScopedTracker>();
+        builder.OnScheduled(async context =>
+        {
+            var tracker = context.EventServices.GetRequiredService<ScopedTracker>();
+            Assert.DoesNotContain(tracker, trackers);
+            trackers.Add(tracker);
+
+            await Task.Yield();
+
+            Assert.Same(tracker, context.EventServices.GetRequiredService<ScopedTracker>());
+            Assert.Equal(disposedBefore + trackers.Count - 1, Volatile.Read(ref ScopedTracker.DisposedCount));
+        });
+        var app = builder.Build();
+
+        var (interop, runtime) = FakeWorld.Create();
+        using var evt = ScheduledEvent.FromJsObject(runtime.WrapToJsObject(interop.Retain(new FakeObject { ["cron"] = "0 * * * *" })));
+        using var env = FakeWorld.CreateEnv(runtime, interop);
+        using var context = FakeWorld.CreateContext(runtime, interop);
+
+        await app.ScheduledAsync(evt, env, context);
+        Assert.Equal(disposedBefore + 1, Volatile.Read(ref ScopedTracker.DisposedCount));
+
+        await app.ScheduledAsync(evt, env, context);
+        Assert.Equal(disposedBefore + 2, Volatile.Read(ref ScopedTracker.DisposedCount));
+        Assert.Equal(2, trackers.Count);
+    }
+
+    [Fact]
     public async Task OnScheduled_ReceivesScopedServices()
     {
         string? greeting = null;
         var builder = WorkerApplication.CreateBuilder();
         builder.Services.AddScoped<Greeter>();
-        builder.OnScheduled((_, _, _, services) =>
+        builder.OnScheduled(context =>
         {
-            greeting = services.GetRequiredService<Greeter>().Greet();
+            Assert.Same(context.Env, context.EventServices.GetRequiredService<Env>());
+            Assert.Same(context.WorkerContext, context.EventServices.GetRequiredService<WorkerContext>());
+            greeting = context.EventServices.GetRequiredService<Greeter>().Greet();
             return Task.CompletedTask;
         });
         var app = builder.Build();
