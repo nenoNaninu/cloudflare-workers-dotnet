@@ -43,6 +43,7 @@ builder.Build().Run();
   - [R2](#r2)
   - [D1](#d1)
     - [Migrations](#migrations)
+  - [Dependency Injection](#dependency-injection)
 - [Limitations](#limitations)
 - [Supported Cloudflare Workers Features](#supported-cloudflare-workers-features)
 
@@ -447,6 +448,30 @@ $ npm run d1:migrate:local
 $ npm run d1:migrate:remote
 ```
 
+### Dependency Injection
+
+Register services with `builder.Services` and resolve them from `context.RequestServices`.
+
+```cs
+using Cloudflare.Workers.Hosting;
+using Microsoft.Extensions.DependencyInjection;
+
+var builder = WorkerApplication.CreateBuilder();
+builder.Services.AddScoped<Greeter>();
+
+builder.MapGet("/", static context =>
+{
+    var greeter = context.RequestServices.GetRequiredService<Greeter>();
+    return Task.FromResult(HttpResponse.Text(greeter.Greet()));
+});
+
+builder.Build().Run();
+
+public sealed class Greeter
+{
+    public string Greet() => "Hello from DI!";
+}
+```
 
 
 ## Limitations
