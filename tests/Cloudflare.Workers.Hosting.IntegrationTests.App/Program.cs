@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using Cloudflare.Workers.Hosting;
 using Cloudflare.Workers.Hosting.Interop;
+using Microsoft.Extensions.DependencyInjection;
 
 // Worker exercised by tests/Cloudflare.Workers.Hosting.IntegrationTests through `wrangler dev`.
 // Every route targets one part of the library that only a real Workers runtime can verify.
@@ -116,10 +117,10 @@ builder.MapGet("/wait-until/:key", static ctx =>
     return Task.FromResult(HttpResponse.Text("accepted", 202));
 });
 
-builder.OnScheduled(static async (evt, env, _) =>
+builder.OnScheduled(static async context =>
 {
-    using var kv = env.Kv("INTEGRATION_TEST_KV");
-    await kv.PutAsync("scheduled:last", $"{evt.Cron}|{evt.ScheduledTime.ToUnixTimeMilliseconds() > 0}");
+    using var kv = context.Env.Kv("INTEGRATION_TEST_KV");
+    await kv.PutAsync("scheduled:last", $"{context.ScheduledEvent.Cron}|{context.ScheduledEvent.ScheduledTime.ToUnixTimeMilliseconds() > 0}");
 });
 
 // -- KV ----------------------------------------------------------------------------------
@@ -468,6 +469,44 @@ builder.MapGet("/stress/handles/:n", static async ctx =>
     return HttpResponse.Text(n.ToString());
 });
 
+// -- dependency injection --------------------------------------------------------------------
+
+builder.Services.AddSingleton<WorkerCache>();
+builder.Services.AddScoped<ScopedKvStore>();
+
+builder.MapGet("/di/cache/:key", static ctx =>
+{
+    var cache = ctx.RequestServices.GetRequiredService<WorkerCache>();
+    string key = ctx.Parameters["key"];
+    string value = cache.GetOrAdd(key, static () => "hello from cache");
+
+    var sharedCache = ctx.RequestServices.GetRequiredService<WorkerCache>();
+    string cachedValue = sharedCache.GetOrAdd(key, static () => "cache miss");
+
+    return Task.FromResult(HttpResponse.Json(
+        new CacheInfo(value, cachedValue, ReferenceEquals(cache, sharedCache)),
+        IntegrationTestJsonContext.Default.CacheInfo));
+});
+
+builder.MapPut("/di/kv/:key", static async ctx =>
+{
+    var services = ctx.RequestServices;
+    var store = services.GetRequiredService<ScopedKvStore>();
+    await store.PutAsync(ctx.Parameters["key"], await ctx.Request.ReadAsStringAsync());
+
+    return HttpResponse.Json(
+        new DiInfo(
+            ReferenceEquals(store, services.GetRequiredService<ScopedKvStore>()),
+            store.Var),
+        IntegrationTestJsonContext.Default.DiInfo);
+});
+
+builder.MapGet("/di/kv/:key", static async ctx =>
+{
+    string? value = await ctx.RequestServices.GetRequiredService<ScopedKvStore>().GetAsync(ctx.Parameters["key"]);
+    return value is null ? HttpResponse.NotFound() : HttpResponse.Text(value);
+});
+
 builder.Build().Run();
 
 static HttpClient CreateHttpClient(HttpContext ctx, bool allowAutoRedirect = true)
@@ -550,6 +589,46 @@ static string? Query(HttpContext ctx, string name)
     return null;
 }
 
+/// <summary>Best-effort cache local to this Worker instance.</summary>
+public sealed class WorkerCache
+{
+    private readonly Dictionary<string, string> _values = new();
+
+    public string GetOrAdd(string key, Func<string> factory)
+    {
+        if (!_values.TryGetValue(key, out var value))
+        {
+            value = factory();
+            _values[key] = value;
+        }
+
+        return value;
+    }
+}
+
+/// <summary>Scoped service that receives the current event's <see cref="Env"/> through constructor injection.</summary>
+public sealed class ScopedKvStore(Env env) : IDisposable
+{
+    private readonly KvNamespace _kv = env.Kv("INTEGRATION_TEST_KV");
+
+    public string? Var { get; } = env.Var("INTEGRATION_TEST_VAR");
+
+    public Task PutAsync(string key, string value) => _kv.PutAsync("di:" + key, value);
+
+    public Task<string?> GetAsync(string key) => _kv.GetTextAsync("di:" + key);
+
+    public void Dispose() => _kv.Dispose();
+}
+
+public sealed record CacheInfo(
+    [property: JsonPropertyName("value")] string Value,
+    [property: JsonPropertyName("cachedValue")] string CachedValue,
+    [property: JsonPropertyName("sameSingletonInstance")] bool SameSingletonInstance);
+
+public sealed record DiInfo(
+    [property: JsonPropertyName("sameScopedInstance")] bool SameScopedInstance,
+    [property: JsonPropertyName("var")] string? Var);
+
 public sealed record Person(
     [property: JsonPropertyName("name")] string Name,
     [property: JsonPropertyName("age")] int Age);
@@ -618,4 +697,6 @@ public sealed record HttpClientResponseInfo(
 [JsonSerializable(typeof(D1RunInfo))]
 [JsonSerializable(typeof(FetchHeadersInfo))]
 [JsonSerializable(typeof(HttpClientResponseInfo))]
+[JsonSerializable(typeof(DiInfo))]
+[JsonSerializable(typeof(CacheInfo))]
 public sealed partial class IntegrationTestJsonContext : JsonSerializerContext;

@@ -31,7 +31,7 @@ internal sealed class HttpRequestRouter
         return this;
     }
 
-    public Task<HttpResponse> HandleAsync(HttpRequest request, Env env, WorkerContext executionContext)
+    public Task<HttpResponse> HandleAsync(HttpRequest request, Env env, WorkerContext executionContext, IServiceProvider requestServices)
     {
         string path = request.Path;
         var requestSegments = SplitSegments(path);
@@ -46,13 +46,13 @@ internal sealed class HttpRequestRouter
 
             if (TryMatch(route.Segments, requestSegments, out var parameters))
             {
-                return route.Handler(new HttpContext(request, env, executionContext, parameters));
+                return route.Handler(new HttpContext(request, env, executionContext, parameters, requestServices));
             }
         }
 
         if (_fallback is not null)
         {
-            return _fallback(new HttpContext(request, env, executionContext, EmptyParams));
+            return _fallback(new HttpContext(request, env, executionContext, EmptyParams, requestServices));
         }
 
         return Task.FromResult(HttpResponse.NotFound());

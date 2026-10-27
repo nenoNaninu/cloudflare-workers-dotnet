@@ -6,12 +6,14 @@ public sealed class HttpContext
         HttpRequest request,
         Env env,
         WorkerContext executionContext,
-        IReadOnlyDictionary<string, string> parameters)
+        IReadOnlyDictionary<string, string> parameters,
+        IServiceProvider requestServices)
     {
         Request = request;
         Env = env;
         WorkerContext = executionContext;
         Parameters = parameters;
+        RequestServices = requestServices;
     }
 
     public HttpRequest Request { get; }
@@ -21,4 +23,6 @@ public sealed class HttpContext
     public WorkerContext WorkerContext { get; }
 
     public IReadOnlyDictionary<string, string> Parameters { get; }
+
+    public IServiceProvider RequestServices { get; }
 }

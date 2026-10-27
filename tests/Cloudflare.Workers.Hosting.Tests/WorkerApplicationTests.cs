@@ -65,11 +65,11 @@ public class WorkerApplicationTests : IDisposable
     [Fact]
     public async Task Builder_OnScheduledRunsHandler()
     {
-        string? seenCron = null;
+        ScheduledEventContext? seenContext = null;
         var app = WorkerApplication.CreateBuilder()
-            .OnScheduled((evt, _, _) =>
+            .OnScheduled(context =>
             {
-                seenCron = evt.Cron;
+                seenContext = context;
                 return Task.CompletedTask;
             })
             .Build();
@@ -81,7 +81,19 @@ public class WorkerApplicationTests : IDisposable
 
         await app.ScheduledAsync(evt, env, context);
 
-        Assert.Equal("0 * * * *", seenCron);
+        Assert.NotNull(seenContext);
+        Assert.Same(evt, seenContext.ScheduledEvent);
+        Assert.Same(env, seenContext.Env);
+        Assert.Same(context, seenContext.WorkerContext);
+        Assert.Equal("0 * * * *", seenContext.ScheduledEvent.Cron);
+    }
+
+    [Fact]
+    public void Builder_OnScheduledRejectsNullHandler()
+    {
+        var builder = WorkerApplication.CreateBuilder();
+
+        Assert.Throws<ArgumentNullException>(() => builder.OnScheduled(null!));
     }
 
     [Fact]
@@ -117,9 +129,9 @@ public class WorkerApplicationTests : IDisposable
         string? seenCron = null;
 
         WorkerApplication.CreateBuilder()
-            .OnScheduled((scheduledEvent, _, _) =>
+            .OnScheduled(context =>
             {
-                seenCron = scheduledEvent.Cron;
+                seenCron = context.ScheduledEvent.Cron;
                 return Task.CompletedTask;
             })
             .Build()

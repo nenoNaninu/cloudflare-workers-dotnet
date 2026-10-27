@@ -1,16 +1,24 @@
-﻿namespace Cloudflare.Workers.Hosting;
+﻿using Microsoft.Extensions.DependencyInjection;
+
+namespace Cloudflare.Workers.Hosting;
 
 
 public sealed class WorkerApplication : IWorkerFetchHandler, IWorkerScheduledHandler
 {
     private readonly HttpRequestRouter _router;
-    private readonly Func<ScheduledEvent, Env, WorkerContext, Task>? _scheduled;
+    private readonly ScheduledEventHandler? _scheduled;
 
-    internal WorkerApplication(HttpRequestRouter router, Func<ScheduledEvent, Env, WorkerContext, Task>? scheduled)
+    internal WorkerApplication(
+        IServiceProvider services,
+        HttpRequestRouter router,
+        ScheduledEventHandler? scheduled)
     {
+        Services = services;
         _router = router;
         _scheduled = scheduled;
     }
+
+    public IServiceProvider Services { get; }
 
     public static WorkerApplicationBuilder CreateBuilder() => new();
 
@@ -33,21 +41,44 @@ public sealed class WorkerApplication : IWorkerFetchHandler, IWorkerScheduledHan
         }
     }
 
-    public Task<HttpResponse> FetchAsync(HttpRequest request, Env env, WorkerContext context)
-        => _router.HandleAsync(request, env, context);
+    public async Task<HttpResponse> FetchAsync(HttpRequest request, Env env, WorkerContext context)
+    {
+        await using var scope = CreateEventScope(env, context);
+        return await _router.HandleAsync(request, env, context, scope.ServiceProvider).ConfigureAwait(false);
+    }
 
-    public Task ScheduledAsync(ScheduledEvent scheduledEvent, Env env, WorkerContext context)
-        => _scheduled is null ? Task.CompletedTask : _scheduled(scheduledEvent, env, context);
+    public async Task ScheduledAsync(ScheduledEvent scheduledEvent, Env env, WorkerContext context)
+    {
+        if (_scheduled is null)
+        {
+            return;
+        }
+
+        await using var scope = CreateEventScope(env, context);
+        await _scheduled(new ScheduledEventContext(scheduledEvent, env, context, scope.ServiceProvider)).ConfigureAwait(false);
+    }
+
+    private AsyncServiceScope CreateEventScope(Env env, WorkerContext context)
+    {
+        var scope = Services.CreateAsyncScope();
+        scope.ServiceProvider.GetRequiredService<WorkerEventScopeHolder>().Set(env, context);
+        return scope;
+    }
 }
 
 public sealed class WorkerApplicationBuilder
 {
     private readonly HttpRequestRouter _router = new();
-    private Func<ScheduledEvent, Env, WorkerContext, Task>? _scheduled;
+    private ScheduledEventHandler? _scheduled;
 
     internal WorkerApplicationBuilder()
     {
+        Services.AddScoped(static _ => new WorkerEventScopeHolder());
+        Services.AddScoped(static sp => sp.GetRequiredService<WorkerEventScopeHolder>().Env);
+        Services.AddScoped(static sp => sp.GetRequiredService<WorkerEventScopeHolder>().WorkerContext);
     }
+
+    public IServiceCollection Services { get; } = new ServiceCollection();
 
     public WorkerApplicationBuilder MapGet(string pattern, HttpRequestHandler handler)
     {
@@ -103,11 +134,16 @@ public sealed class WorkerApplicationBuilder
         return this;
     }
 
-    public WorkerApplicationBuilder OnScheduled(Func<ScheduledEvent, Env, WorkerContext, Task> handler)
+    public WorkerApplicationBuilder OnScheduled(ScheduledEventHandler handler)
     {
+        ArgumentNullException.ThrowIfNull(handler);
         _scheduled = handler;
         return this;
     }
 
-    public WorkerApplication Build() => new(_router, _scheduled);
+    public WorkerApplication Build()
+    {
+        var services = Services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        return new(services, _router, _scheduled);
+    }
 }
