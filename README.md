@@ -43,6 +43,7 @@ builder.Build().Run();
   - [R2](#r2)
   - [D1](#d1)
     - [Migrations](#migrations)
+  - [Browser Run](#browser-run)
   - [Dependency Injection](#dependency-injection)
 - [Limitations](#limitations)
 - [Supported Cloudflare Workers Features](#supported-cloudflare-workers-features)
@@ -448,6 +449,81 @@ $ npm run d1:migrate:local
 $ npm run d1:migrate:remote
 ```
 
+### Browser Run
+
+Configure a browser binding in `wrangler.jsonc`:
+
+```jsonc
+{
+  "browser": { "binding": "BROWSER" }
+}
+```
+
+Use the [Browser binding API](https://developers.cloudflare.com/browser-run/reference/browser-binding-api/) to open `https://example.com` and return its rendered HTML:
+
+```cs
+using System.Text.Json;
+
+builder.MapGet("/browser/content", static async context =>
+{
+    using var browser = context.Env.Browser("BROWSER");
+    var session = await browser.AcquireAsync();
+
+    try
+    {
+        using var devtools = browser.DevTools;
+        var page = await devtools.NewTargetAsync(session.SessionId);
+        using var connection = await browser.ConnectSessionAsync(session.SessionId,
+            new BrowserConnectOptions { TargetId = page.Id });
+        using var response = await connection.WebSocket.FetchAsync(
+            new FetchRequestMessage("https://browser-binding.invalid")
+            {
+                Headers = { { "Upgrade", "websocket" } }
+            });
+        using var socket = response.GetWebSocket()
+            ?? throw new InvalidOperationException("WebSocket upgrade failed.");
+        socket.Accept();
+        socket.Send("""{"id":1,"method":"Page.enable"}""");
+
+        while (true)
+        {
+            using var message = await socket.ReceiveAsync();
+            using var json = JsonDocument.Parse(message.AsString());
+            var root = json.RootElement;
+            if (root.TryGetProperty("error", out var error))
+            {
+                throw new InvalidOperationException(error.GetRawText());
+            }
+
+            if (root.TryGetProperty("id", out var id))
+            {
+                if (id.GetInt32() == 1)
+                {
+                    socket.Send("""{"id":2,"method":"Page.navigate","params":{"url":"https://example.com"}}""");
+                }
+                else if (id.GetInt32() == 3)
+                {
+                    var html = root.GetProperty("result").GetProperty("result").GetProperty("value").GetString();
+                    return HttpResponse.Html(html ?? string.Empty);
+                }
+            }
+            else if (root.TryGetProperty("method", out var method) && method.GetString() == "Page.loadEventFired")
+            {
+                socket.Send("""{"id":3,"method":"Runtime.evaluate","params":{"expression":"document.documentElement.outerHTML","returnByValue":true}}""");
+            }
+        }
+    }
+    finally
+    {
+        await browser.CloseSessionAsync(session.SessionId);
+    }
+});
+```
+
+Session management, Live View, and DevTools methods are available as async C# APIs. Close sessions explicitly with `CloseSessionAsync`; disposing a binding or connection only releases its handles.
+
+The WebSocket Fetcher is pinned to the session and target; `https://browser-binding.invalid` is a placeholder URL. CDP command IDs and events are handled explicitly in this example.
+
 ### Dependency Injection
 
 Register services with `builder.Services` and resolve them from `context.RequestServices`.
@@ -512,5 +588,8 @@ Running WASM on Cloudflare Workers comes with several limitations:
   - all
   - [first](https://developers.cloudflare.com/d1/worker-api/prepared-statements/#first)
 - [Service Binding](https://developers.cloudflare.com/workers/runtime-apis/bindings/service-bindings/)
+- [Browser Run binding](https://developers.cloudflare.com/browser-run/reference/browser-binding-api/)
+  - Session management, Live View, and DevTools JSON methods
+  - CDP WebSocket connections
 - [Context](https://developers.cloudflare.com/workers/runtime-apis/context/)
   - [waitUntil](https://developers.cloudflare.com/workers/runtime-apis/context/#waituntil)

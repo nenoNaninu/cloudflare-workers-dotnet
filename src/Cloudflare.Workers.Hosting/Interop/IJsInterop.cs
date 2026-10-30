@@ -32,6 +32,8 @@ public interface IJsInterop
     bool TryCallFunction(JsHandle function, JsHandle thisArg, JsHandle argsArray, out JsHandle result);
     bool TryConstruct(JsHandle constructor, JsHandle argsArray, out JsHandle result);
 
+    JsHandle CallbackNew(int callbackId);
+
     // -- binary data ----------------------------------------------------------
     JsHandle BytesNew(ReadOnlySpan<byte> bytes);
     int BytesLength(JsHandle handle);

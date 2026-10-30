@@ -199,6 +199,15 @@ const cfImports = {
     }
   },
 
+  callback_new: (callbackId) => holdToHeap((...args) => {
+    const argumentsHandle = holdToHeap(args);
+    try {
+      exportsOf().cf_callback_invoke(callbackId, argumentsHandle);
+    } finally {
+      releaseFromHeap(argumentsHandle);
+    }
+  }),
+
   bytes_new: (ptr, len) => {
     const copy = new Uint8Array(len);
     copy.set(new Uint8Array(instance.exports.memory.buffer, ptr, len));

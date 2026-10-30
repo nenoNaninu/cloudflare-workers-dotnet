@@ -197,6 +197,20 @@ public sealed class FakeJsInterop : IJsInterop
 
     public JsHandle BytesNew(ReadOnlySpan<byte> bytes) => Retain(bytes.ToArray());
 
+    public JsHandle CallbackNew(int callbackId) => Retain(new FakeFunction((_, args) =>
+    {
+        var arguments = Retain(new FakeArray(args));
+        try
+        {
+            CallbackRegistry.Invoke(callbackId, arguments);
+            return JsUndefined.Value;
+        }
+        finally
+        {
+            ReleaseHandle(arguments);
+        }
+    }));
+
     public int BytesLength(JsHandle handle) => AsBytes(handle).Length;
 
     public void BytesRead(JsHandle handle, Span<byte> destination) => AsBytes(handle).CopyTo(destination);
