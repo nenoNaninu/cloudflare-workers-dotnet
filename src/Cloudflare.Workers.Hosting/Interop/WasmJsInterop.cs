@@ -150,6 +150,8 @@ public sealed unsafe class WasmJsInterop : IJsInterop
         return status == 0;
     }
 
+    public JsHandle CallbackNew(int callbackId) => new(WasmImports.CallbackNew(callbackId));
+
     public JsHandle BytesNew(ReadOnlySpan<byte> bytes)
     {
         fixed (byte* ptr = bytes)

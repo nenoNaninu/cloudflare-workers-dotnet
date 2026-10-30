@@ -124,6 +124,23 @@ public sealed class FetchResponseMessage : IDisposable
 
     public HttpHeaders Headers { get; } = new();
 
+    /// <summary>
+    /// Returns the WebSocket from an upgrade response, or null for a normal HTTP response.
+    /// The caller must dispose the socket and call Accept() before sending or receiving.
+    /// </summary>
+    public WorkerWebSocket? GetWebSocket()
+    {
+        ObjectDisposedException.ThrowIf(_jsResponse is null, this);
+        var socket = _jsResponse.GetProperty("webSocket");
+        if (socket.IsNullOrUndefined)
+        {
+            socket.Dispose();
+            return null;
+        }
+
+        return new WorkerWebSocket(socket);
+    }
+
     public async Task<string> ReadAsStringAsync()
     {
         ObjectDisposedException.ThrowIf(_jsResponse is null, this);

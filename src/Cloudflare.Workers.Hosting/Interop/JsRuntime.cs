@@ -32,6 +32,8 @@ public sealed class JsRuntime
 
     public JsObject NewArray() => WrapToJsObject(Interop.ArrayNew());
 
+    public JsObject NewCallback(int callbackId) => WrapToJsObject(Interop.CallbackNew(callbackId));
+
     public JsObject NewArray(params JsArg[] items)
     {
         var array = Interop.ArrayNew();

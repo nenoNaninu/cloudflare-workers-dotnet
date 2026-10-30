@@ -31,6 +31,8 @@ public sealed class Env : IDisposable
 
     public ServiceBinding Service(string binding) => new(GetBinding(binding));
 
+    public BrowserBinding Browser(string binding) => new(GetBinding(binding));
+
     private JsObject GetBinding(string name)
     {
         var binding = _js.GetProperty(name);

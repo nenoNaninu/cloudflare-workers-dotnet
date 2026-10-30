@@ -6,8 +6,9 @@
 public static class ContinuationRegistry
 {
     private static readonly Dictionary<int, Action<bool, JsHandle>> Continuations = [];
-    private static int ContinuationId;
     private static readonly Lock Lock = new();
+    private static int ContinuationId;
+
 
     public static int Register(Action<bool, JsHandle> continuation)
     {

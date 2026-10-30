@@ -93,6 +93,10 @@ internal static unsafe class WasmImports
     internal static extern int Construct(int constructor, int argsArray, int* result);
 
     [WasmImportLinkage]
+    [DllImport(Module, EntryPoint = "callback_new")]
+    internal static extern int CallbackNew(int callbackId);
+
+    [WasmImportLinkage]
     [DllImport(Module, EntryPoint = "bytes_new")]
     internal static extern int BytesNew(byte* data, int length);
 
